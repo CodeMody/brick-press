@@ -9,8 +9,11 @@
 build/
 
 # ---- dev-tool artifacts ----
-# boot screenshots written by tools/shot_on_boot.gd
-.shots/
+# boot screenshots written by tools/shot_on_boot.gd — all scratch except one pinned
+# hero shot that README.md embeds: reshooting refreshes the README image in place,
+# and git simply notices the pixels changed
+.shots/*
+!.shots/5_fun.png
 # legacy scratch save dirs; live dev runs now redirect user:// to
 # %APPDATA%\Breakout Godot (Godot 4.7 has no --user-data-dir flag — see DEV-NOTES.md)
 .test_userdata/

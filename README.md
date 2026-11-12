@@ -2,6 +2,10 @@
 
 A juice-heavy arcade brick-breaker: smash your way through twelve seeded brick layouts — punched sieves to giant X formations — while ten kinds of powerups rain from the blocks, TNT topples its neighbours in domino waves, and 10-hit combos ignite a ×2 **FEVER**. The whole game is drawn from a single script onto a fixed 960×640 canvas that stretches to fill any window, over a gradient sky with a drifting, twinkling starfield.
 
+![Neon Breakout mid-run: molten lava ball with warm trail, COMBO x6 pill, Shield pickup popping as its energy floor glows under the paddle](.shots/5_fun.png)
+
+*Mid-run juice: a molten **lava ball** carves through bricks trailing warmth, `COMBO ×6` burns top-center, and a fresh **Shield** pop lights its energy floor under the paddle — active powerup timers sit bottom-left.*
+
 ## Run
 
 > **Players**: the Windows build lives under **Releases** — one self-contained `Breakout.exe`, no install (saves: `%APPDATA%\Godot\app_userdata\Breakout Godot\`).
