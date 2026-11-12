@@ -1,6 +1,6 @@
-# Breakout — Godot 4 port
+# Neon Breakout
 
-Faithful port of the browser version of this game — **the browser original is retired**. Same physics, same constants, same seeded levels: the two cross-engine **layout parity anchors** (the port's fidelity contract with the JS original) are enforced by the headless test harness — exit 0 on every pass.
+A juice-heavy arcade brick-breaker: smash your way through twelve seeded brick layouts — punched sieves to giant X formations — while ten kinds of powerups rain from the blocks, TNT topples its neighbours in domino waves, and 10-hit combos ignite a ×2 **FEVER**. The whole game is drawn from a single script onto a fixed 960×640 canvas that stretches to fill any window, over a gradient sky with a drifting, twinkling starfield.
 
 ## Run
 
