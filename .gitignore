@@ -15,3 +15,6 @@ build/
 # %APPDATA%\Breakout Godot (Godot 4.7 has no --user-data-dir flag — see README)
 .test_userdata/
 .dev_userdata/
+
+# ---- local dev notes (machine-specific paths; deliberately untracked) ----
+DEV-NOTES.md

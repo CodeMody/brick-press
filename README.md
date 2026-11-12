@@ -68,35 +68,3 @@ Documented deviations from the JS original (accepted):
 **Music** — the pack ships three generated chiptune loops (see the Gameplay section); add your own alongside them. Drop `.ogg` / `.mp3` / `.wav` files into `music/`, focus the editor once (or `--import`) so Godot imports them, and re-open the Settings menu — playback rescans and starts picking up new files. `music/manifest.json` controls the playlist: `"music"` names merge with the folder scan (deduped), `"shuffle"` orders playback with the game's seeded RNG, `"loop"` decides whether playback continues past the last track. An empty folder means a silent boot (no crash).
 
 **What persists** (`user://` on Windows = `%APPDATA%\Godot\app_userdata\Breakout Godot\`) — `user://breakout_settings.cfg` (section `[settings]`): `sfx_vol`, `music_vol` (linear 0–1), `fullscreen`, `size`. The windowed `size` stays saved even while fullscreen is on (the size selector is disabled meanwhile). Audio runs on three buses: Master + `Music` + `SFX` — the SFX tone pool routes to SFX, the music player to Music; volumes map linear 0–1 → bus dB and 0 = muted. Defaults: SFX 1.0, Music 0.5.
-
-## Headless test harness
-
-Mirrors the JS harness (order-for-order, incl. the main-menu flow, the content-scaling settings, the keyboard-only paddle, the shipped music set and the expansion-pass checks for gold/shield/combo/trail/burn-through) plus the two cross-engine **layout parity anchors** (hard gates), and closes with the **Excitement pass** (FEVER ignition at combo 10, clock re-light, ×2 payouts proved via a steel clink so nothing muddies the delta, expiry bonus + popup, and the full TNT domino choreography: bomb detonates, neighbour stands with a lit fuse, the 3×3 chain-kills steel, shockwave ring + shake spawn, payouts land, the fuse pops on its beat and its wave takes the next block, and an emptied field auto-clears even when the wave lands the final blow) followed by the **menu pass**: three-track music set, leaderboard ranking / trimming / scoreless skip / cfg round-trip, the unified Esc sheet's two faces (Paused with the quit row vs Settings with Back to menu), the leaderboard submenu's open/dismiss/modal-exclusivity rules, the brief LEVEL title card, and the close-requested hook that books a pending run before the app dies. Run from the parent folder:
-
-```
-"C:\Program Files\Godot\Godot_v4.7.2-stable_win64.exe" --headless --path breakout-game-godot --import
-"C:\Program Files\Godot\Godot_v4.7.2-stable_win64.exe" --headless --path breakout-game-godot -s res://tools/test_port.gd
-```
-
-Expected verdict: `ALL CHECKS PASSED` (exit 0). Notes:
-
-- Frame pumping is real-time, so time-sensitive checks are qualitative (mirroring the JS harness); only the anchors and state machines are exact. The harness wipes `user://breakout_high.cfg` at start for a deterministic storage state.
-- **Godot 4.7 has no `--user-data-dir` CLI flag** — it parses but does nothing (probed against `--help` and a write-and-see run). So `test_port.gd` and `shot_on_boot.gd` flip `application/config/use_custom_user_dir` themselves at the top of `_initialize`: dev-run `user://` lands in `%APPDATA%\Breakout Godot\` instead of the game's own `%APPDATA%\Godot\app_userdata\Breakout Godot\`. Before that, every harness wipe silently deleted the *player's* board — the dev tool IS the save data's landlord here, and it used to squat.
-- The two `ObjectDB instances leaked at exit` warnings are cosmetic (audio pool alive when the harness calls `quit()`).
-- `tools/shot_on_boot.gd` is a dev-only tool: it boots the game in a real window, snaps the rendered viewport at eleven UI states (menu / leaderboard submenu / gameplay / lava / combo+shield "juice" shot / background showcase / the replaced bg2 / FEVER mode / live TNT blast / the unified Paused sheet / Settings face) into `.shots/`, and exits — used to verify visuals without guessing. Each snap calls `RenderingServer.force_draw()` first: a background window throttles to ~1 fps on some drivers and the swapchain image would otherwise lag behind the scripted state. (`tools/` is excluded from exports.)
-
-Last full run: **90/90 ALL CHECKS PASSED** (2026-11-12).
-
-## Export — Windows exe
-
-`build/Breakout.exe` — one self-contained file (engine template + game scripts + backgrounds + manifests + icon all embedded via `embed_pck`; x86_64). Re-export from the parent folder:
-
-```
-"C:\Program Files\Godot\Godot_v4.7.2-stable_win64.exe" --headless --path breakout-game-godot --export-release "Windows Desktop" "$PWD\breakout-game-godot\build\Breakout.exe"
-```
-
-The preset lives in `export_presets.cfg` (preset **Windows Desktop**): `tools/`, `.test_userdata/` and `.dev_userdata/` are excluded from the pack, the app/window icon is `icon.png`, and the template paths are pinned via `custom_template/*` (below).
-
-**Export templates location** — the Windows templates of Godot **4.7.2.stable** (downloaded from the official GitHub release, sha256-verified) are installed beside the editor binary in **`C:\Program Files\Godot\export_templates\4.7.2.stable\`**. Godot's automatic lookup only checks the user-data dir, so `%APPDATA%\Godot\export_templates\4.7.2.stable` is a **junction** pointing at that folder — exports from the editor GUI work without any setup, and there is a single copy on disk.
-
-Note: the drop-in `music/` + `backgrounds/` workflow is an editor-side feature — an exported exe ships whatever those folders contained at export time. To put different music/backgrounds into the build, add the files in the editor and re-export.
