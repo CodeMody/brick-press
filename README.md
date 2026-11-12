@@ -1,20 +1,22 @@
 # Breakout — Godot 4 port
 
-Faithful port of the browser version of this game — **the browser original is retired**; the layout anchor constants in `tools/test_port.gd` are now the standalone source of truth (keep them byte-identical). Same physics, same constants, same seeded levels — both layout anchors verified by the headless harness.
+Faithful port of the browser version of this game — **the browser original is retired**. Same physics, same constants, same seeded levels: the two cross-engine **layout parity anchors** (the port's fidelity contract with the JS original) are enforced by the headless test harness — exit 0 on every pass.
 
 ## Run
 
-Open `project.godot` in **Godot 4.7+** (tested on 4.7.2 stable) and press F5, or:
+> **Players**: the Windows build lives under **Releases** — one self-contained `Breakout.exe`, no install (saves: `%APPDATA%\Godot\app_userdata\Breakout Godot\`).
+
+From source, open `project.godot` in **Godot 4.7+** (tested on 4.7.2 stable) and press F5, or:
 
 ```
 Godot_v4.7.2-stable_win64.exe --path .
 ```
 
-Boots into the **main menu** (a full-screen title scene — the game's gradient sky, a drifting starfield, a decorative brick wall and an opaque card with Play / Settings / Leaderboards / Quit, with an idle ball bouncing over the paddle); default window 1280×720 (windowed). The game canvas is a fixed 960×640 design space that Godot scales to fill any window size (`window/stretch/mode="canvas_items"`, `aspect="expand"` — the visible world grows past 960×640 on windows wider than 3:2 instead of showing letterbox bands, and the game draws its background across the whole visible world). 4.7.2 removed the old `content_scale_offset`, so centering of the design space is done in `apply_display_stretch()`/`_center_content()` via the public `Viewport.canvas_transform`. Everything renders through `_draw()` on the root Control; no scene-tree game objects.
+Boots into the **main menu** (a full-screen title scene — the game's gradient sky, a drifting starfield, a decorative brick wall and an opaque card with Play / Settings / Leaderboards / Quit, with an idle ball bouncing over the paddle); default window 1280×720 (windowed). The game canvas is a fixed 960×640 design space that scales to fill any window size — on windows wider than 3:2 the visible world grows past 960×640 instead of showing letterbox bands, and the background is drawn across the whole visible world.
 
 ## Controls
 
-**Main menu** — click **Play** / **Settings** / **Quit** (or **Tab** to move focus, **Space**/**Enter** to activate). The game behind the menu is fully frozen. **S**/**Esc** also opens the settings overlay directly from the main menu.
+**Main menu** — click **Play** / **Settings** / **Quit** (or **Tab** to move focus, **Space**/**Enter** to activate). The game behind the menu is fully frozen. **Esc** also opens the settings overlay directly from the main menu.
 
 **In game:**
 
@@ -43,21 +45,13 @@ The field stays clean — no permanent hint bar, no level plate, no background f
 - **Combos**: every consecutive block killed *without touching the paddle* climbs a `COMBO ×N` chain (pulsing pill top-center, in the slot the level plate used to own); every 4-chain step pays a rising bonus (`+50 × tier`, tier capped at ×5) with a floating popup + jingle. Landing on the paddle resets the chain.
 - **Wide-field play**: with expand-stretch the visible world is wider than the 960 design space on any window wider than 3:2 — the **side walls and paddle track the real visible edges**, so the paddle reaches both screen corners and no ball ever hides in a margin.
 - **Juice**: fading ball trails (warm-tinted while molten or in FEVER), floating score popups, pickup screen flash, paddle squash + steel-shine bottom edge, **ball squash-&-stretch — the ball elongates along its flight vector the faster it flies**, glassy brick highlight bands, a slow drifting/twinkling starfield behind the gradient sky, bobbing capsules with pulsing halos, a soft vignette over the whole field, and a **heartbeat pulse on the lives pill when it's your last life**. The title scene lives too: drifting stars and an idle ball bouncing over the paddle with a ghost trail.
-- **Music**: the pack ships three generated chiptune loops — **Neon Corridor** (`neon_corridor.wav`, 41 s, 140 BPM, E minor), **Starlight Patrol** (`starlight_patrol.wav`, 45 s, 128 BPM, G minor, hymn-like) and **Circuit Sunset** (`circuit_sunset.wav`, 38 s, 152 BPM, A minor, thin buzzy lead) — one shared NES stack (square lead + arpeggio + triangle bass + noise drums) composed by `tools/compose_music.py`, which regenerates all three byte-deterministically. They play in seeded-shuffle order (the manifest's `"shuffle"`), so the theme never repeats back-to-back. The playlist autoplays at boot through the **Music** bus, so the Settings music slider controls it live; drop more `.ogg/.mp3/.wav` files into `music/` and the playlist grows. Two belt-and-braces details for **exported builds**: a Godot 4.7 PCK does not list the source audio file by name — only its import artifact + `.import` sidecar — so the folder scan recognizes sidecars too, and `load()` falls back to the sidecar's stored artifact when the plain path misses. The game prints a one-line music/bg load report to stdout at boot (visible when launched from a console) — handy when a build sounds mysteriously silent; `tools/pack_probe.gd` is a standalone inspector for the same mystery.
+- **Music**: the pack ships three generated chiptune loops — **Neon Corridor** (`neon_corridor.wav`, 41 s, 140 BPM, E minor), **Starlight Patrol** (`starlight_patrol.wav`, 45 s, 128 BPM, G minor, hymn-like) and **Circuit Sunset** (`circuit_sunset.wav`, 38 s, 152 BPM, A minor, thin buzzy lead). They play in seeded-shuffle order (the theme never repeats back-to-back), autoplay at boot through the **Music** bus (the Settings music slider controls it live), and the playlist grows when you drop more `.ogg/.mp3/.wav` files into `music/`.
 - **Local leaderboard**: every finished run lands on the board — game over, Quit to menu / Quit game, **even closing the window mid-run** (the X/Alt-F4 books the pending score before the app dies, so scores can't silently vanish anymore). The best **8** live in the same `user://breakout_high.cfg` (`[default] high` + a `[board]` section, rewritten whole so the two can never drift apart). The main menu's **Leaderboards** button opens a submenu card — the same modal pattern as Settings — listing all saved runs (score · level · date, best in gold), dismissed by Esc or Close. Levels announce themselves too: each new level shows a brief **LEVEL N** title card over the field, and the number then lives quietly in the pause sheet (no permanent HUD plate).
-- Levels are generated from the seed `level*7919+13` with an exact mulberry32 emulation — layouts match the JS game exactly (level 2+ paints positional gold veins onto normal blocks afterwards — the rule never consumes the seeded rng, so the anchors stay valid).
 - High score persists to `user://breakout_high.cfg`.
 
-## Backgrounds (PNG slots)
+## Backgrounds
 
-Drop PNGs into `backgrounds/` (named or listed in `backgrounds/manifest.json`). The folder is scanned alphabetically at boot and the manifest merges extra names; **B** cycles through them (first press shows `bg1.png`), and the Settings panel has a **Background** picker (item 0 = the default gradient). To add a background while the game runs: copy the PNG into `backgrounds/`, focus the Godot editor once so it imports the file, then re-open the Settings menu — the picker rescans every time it opens.
-
-The shipped set (`bg1`–`bg5`: starfield, *Amethyst Cathedral* — deep purple night with soft light shafts, replacing the player-rejected "Dusk Horizon" sunset, aurora, nebula, moonlit sea) was generated procedurally — `tools/paint_bgs.py` (bundled-Python, numpy+Pillow) repaints `bg2`–`bg5` in one go; `bg1` is hand-kept.
-
-Documented deviations from the JS original (accepted):
-1. Font is the theme default (DejaVu-ish), not browser monospace — GDScript has no font-family switch; banner width uses `get_string_size`.
-2. `shadowBlur` glow is approximated with halo layers.
-3. High-score storage is `ConfigFile` under `user://` (browser localStorage equivalent).
+**Five ship in the pack** — `bg1` starfield, `bg2` *Amethyst Cathedral* (a deep purple night with soft light shafts), `bg3` aurora, `bg4` nebula, `bg5` moonlit sea. **B** cycles through them (first press shows `bg1.png`); item 0 in the Settings **Background** picker is the game's own gradient sky. The pickers rescan whenever the menu opens, so new images land without a restart.
 
 ## Main menu, Settings, Music
 
@@ -65,6 +59,6 @@ Documented deviations from the JS original (accepted):
 
 **Settings — same sheet, two faces**: opened in game it's the pause menu (Paused + run info + control line + Resume / Quit to menu / Quit game); opened from the menu it's plain Settings (Back to menu). **Esc** toggles whichever face fits the moment. — Resolution: **1280×720 (720p) / 1920×1080 (1080p) / 2560×1440 (1440p)** — the fixed 960×640 game canvas scales + letterboxes into the window at any size; Fullscreen; **SFX volume** and **Music volume** sliders (0–100, applied live to their audio buses); Background picker. The game stays fully frozen while the sheet is open. Older saved sizes (960×640, 1280×800, …) migrate to 1280×720 on load.
 
-**Music** — the pack ships three generated chiptune loops (see the Gameplay section); add your own alongside them. Drop `.ogg` / `.mp3` / `.wav` files into `music/`, focus the editor once (or `--import`) so Godot imports them, and re-open the Settings menu — playback rescans and starts picking up new files. `music/manifest.json` controls the playlist: `"music"` names merge with the folder scan (deduped), `"shuffle"` orders playback with the game's seeded RNG, `"loop"` decides whether playback continues past the last track. An empty folder means a silent boot (no crash).
+**Music** — the playlist itself is driven by `music/manifest.json`: `"music"` names merge with the folder scan (deduped), `"shuffle"` orders playback with the game's seeded RNG, `"loop"` decides whether playback continues past the last track. An empty folder means a silent boot (no crash).
 
 **What persists** (`user://` on Windows = `%APPDATA%\Godot\app_userdata\Breakout Godot\`) — `user://breakout_settings.cfg` (section `[settings]`): `sfx_vol`, `music_vol` (linear 0–1), `fullscreen`, `size`. The windowed `size` stays saved even while fullscreen is on (the size selector is disabled meanwhile). Audio runs on three buses: Master + `Music` + `SFX` — the SFX tone pool routes to SFX, the music player to Music; volumes map linear 0–1 → bus dB and 0 = muted. Defaults: SFX 1.0, Music 0.5.

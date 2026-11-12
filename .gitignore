@@ -12,7 +12,7 @@ build/
 # boot screenshots written by tools/shot_on_boot.gd
 .shots/
 # legacy scratch save dirs; live dev runs now redirect user:// to
-# %APPDATA%\Breakout Godot (Godot 4.7 has no --user-data-dir flag — see README)
+# %APPDATA%\Breakout Godot (Godot 4.7 has no --user-data-dir flag — see DEV-NOTES.md)
 .test_userdata/
 .dev_userdata/
 
