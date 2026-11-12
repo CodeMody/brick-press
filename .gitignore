@@ -1,0 +1,17 @@
+# ---- Godot 4 editor state (regenerated whenever the project opens) ----
+.godot/
+
+# ---- build output ----
+# Breakout.exe is ~111 MB: it ships as a GitHub Release asset, and GitHub
+# refuses regular git blobs over 100 MB anyway. Re-export with:
+#   godot --headless --path breakout-game-godot \
+#     --export-release "Windows Desktop" build/Breakout.exe
+build/
+
+# ---- dev-tool artifacts ----
+# boot screenshots written by tools/shot_on_boot.gd
+.shots/
+# legacy scratch save dirs; live dev runs now redirect user:// to
+# %APPDATA%\Breakout Godot (Godot 4.7 has no --user-data-dir flag — see README)
+.test_userdata/
+.dev_userdata/
