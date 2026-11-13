@@ -150,11 +150,22 @@ func _initialize() -> void:   # SceneTree main-loop entry via -s; root exists he
 	game.handle_mouse_click()
 	check(not game.state.balls[0].stuck, "click launches respawned ball")
 
-	# ---- background cycle ----
-	game.handle_key("b")
+	# ---- background auto-rotation (B is retired — papers rotate with the levels, picker can pin one) ----
+	game.state.level = 1; game.build_level()   # deterministic paper bed: the demolition stages above may already have levelled up
+	check(game.bg_images.size() >= 1 and game.bg_index == 0, "level 1 wears the first paper stock — auto mode, nobody pressed anything")
+	check(game.bg_label() == "background: bg1.png", "background label reflects the live paper: " + game.bg_label())
+	game.handle_key("b")   # the retired key must be inert now
 	await process_frame
-	check(game.bg_images.size() >= 1 and game.bg_index >= 0, "background image texture loaded after B")
-	check(game.bg_label() == "background: bg1.png", "background label updated: " + game.bg_label())
+	check(game.bg_label() == "background: bg1.png", "retired B key is inert — papers no longer respond to it")
+	game.state.level = 2; game.build_level()
+	check(game.bg_label() == "background: bg2.png", "level up rotates to the next paper: " + game.bg_label())
+	game._on_bg_selected(3)   # pin bg3.png via the settings picker
+	check(game.bg_label() == "background: bg3.png" and String(game.settings["bg"]) == "bg3.png", "picker pins a sheet and persists the pin")
+	game.state.level = 4; game.build_level()
+	check(game.bg_label() == "background: bg3.png", "a pinned sheet survives level changes: " + game.bg_label())
+	game._on_bg_selected(0)   # back to auto
+	check(game.bg_label() == "background: bg4.png", "auto re-resolves from the current level: " + game.bg_label())
+	game.state.level = 1; game.build_level()   # hand the harness world back exactly as the LEVEL 1 anchors expect
 
 	# ---- pause tests (user-reported bug #1 regression, ported) ----
 	check(game.state.balls.size() >= 1, "a ball exists before pause test")

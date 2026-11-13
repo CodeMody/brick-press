@@ -111,10 +111,11 @@ var blockTypes := BLOCK_TYPES   # lowercase alias — harness uses game.blockTyp
 
 func blocks() -> Array: return blocks_data   # harness API mirrors the JS game's blocks() function
 
-# ---------------- Backgrounds (PNG slots) ----------------
+# ---------------- Backgrounds (PNG paper stocks, auto-rotating) ----------------
 # Drop PNGs in backgrounds/; backgrounds/manifest.json merges extra names.
+# settings["bg"] = "auto" (default — a different paper stock every level) or a pinned file name.
 var bg_images := {}   # name -> texture
-var bg_index := -1    # -1 = default dark gradient
+var bg_index := -1    # -1 = default plain gradient (fallback only, when no PNGs are installed)
 var bg_label_str := "background: (default gradient)"
 
 func scan_bg_names() -> Array:
@@ -163,6 +164,24 @@ func set_background(i: int) -> void:
 		return
 	bg_index = ((i % bg_images.size()) + bg_images.size()) % bg_images.size()
 	bg_label_update()
+
+func auto_background() -> void:   # "auto" paper mode: level N wears stock (N-1) % count — every level a different sheet, nobody presses anything
+	if String(settings.get("bg", "auto")) != "auto":
+		return   # the settings picker pinned a specific sheet
+	if bg_count() == 0:
+		bg_index = -1   # no PNGs installed: the plain gradient carries the menu and the field
+		bg_label_update()
+		return
+	set_background(int(state.level) - 1)
+
+func apply_bg_setting() -> void:   # resolve settings["bg"] ("auto" | file name) onto the live index — boot path only, build_level owns rotation after that
+	if String(settings.get("bg", "auto")) != "auto":
+		var i: int = bg_names.find(String(settings["bg"]))
+		if i >= 0:
+			set_background(i)
+			return
+		settings["bg"] = "auto"   # a saved name that fell off the disk can't strand the game on nothing
+	auto_background()
 
 # ---------------- Audio (tiny synth tones, generated on demand) ----------------
 const SAMPLE_RATE := 44100
@@ -281,6 +300,7 @@ func generate_level(n: int) -> Array:
 
 func build_level() -> void:
 	blocks_data.clear()
+	auto_background()   # the single choke point every level transition shares (boot, restart, level-up) — the paper rotates here for all of them
 	for cell in generate_level(state.level):
 		var t = BLOCK_TYPES[cell.t]
 		var pal: Array = t.palette
@@ -552,11 +572,12 @@ func quit_to_menu() -> void:   # "Quit to menu" from the paused sheet — an aba
 	_refresh_dim()
 	play_button.grab_focus()
 
-func _on_window_close() -> void:   # the X button / Alt-F4 must never lose a run: the pending score is booked before the app dies
+func _on_window_close() -> void:   # the X button / Alt-F4 must never lose a run: the pending score is booked before the app dies — and the close banks everything, every time
 	if screen == "game" and not bool(state.over) and int(state.score) > 0:
 		add_leaderboard_entry(int(state.score), int(state.level))
 		state.high = int(max(state.high, state.score))
-		save_high()
+	save_high()
+	save_settings()
 
 func quit_game() -> void:   # "Quit game" — same last write, then straight back to the desktop
 	_on_window_close()
@@ -583,7 +604,7 @@ func high_score_saved() -> int:
 	return 0
 
 # ---------------- Settings (persisted via user:// ConfigFile — mirrors the high-score pair's style) ----------------
-var settings := {"sfx_vol": 1.0, "music_vol": 0.5, "fullscreen": false, "size": "1280x720"}   # linear 0.0-1.0 for the two volume keys
+var settings := {"sfx_vol": 1.0, "music_vol": 0.5, "fullscreen": false, "size": "1280x720", "bg": "auto"}   # linear 0.0-1.0 for the two volume keys; bg = "auto" (papers rotate per level) or a pinned file name
 var menu_open := false   # settings menu counts as a full freeze (the harness reads this member directly)
 var menu_return := "game"   # "menu" | "game" — where the Back button / Esc lands when the settings overlay closes
 var menu_panel: PanelContainer
@@ -623,6 +644,7 @@ func load_settings() -> void:
 		var sz := str(cf.get_value("settings", "size", "1280x720"))
 		if not _res_values.has(sz): sz = "1280x720"   # migrate sizes saved by older builds (960x640, 1280x800, ...)
 		settings["size"] = sz   # bracket form: settings.size would collide with Dictionary.size()
+		settings["bg"] = str(cf.get_value("settings", "bg", "auto"))   # saves written before the paper rotation shipped simply default to auto
 
 func save_settings() -> void:
 	var cf := ConfigFile.new()
@@ -630,6 +652,7 @@ func save_settings() -> void:
 	cf.set_value("settings", "music_vol", settings.music_vol)
 	cf.set_value("settings", "fullscreen", settings.fullscreen)
 	cf.set_value("settings", "size", settings["size"])
+	cf.set_value("settings", "bg", settings["bg"])
 	cf.save("user://breakout_settings.cfg")
 
 func set_setting(key: String, value: Variant) -> void:   # test hook + menu path — apply immediately, persist always
@@ -980,7 +1003,7 @@ func build_settings_menu() -> void:
 	sheet_status.add_theme_color_override("font_color", Color("#6f6757"))
 	box.add_child(sheet_status)
 	sheet_hints = Label.new()
-	sheet_hints.text = "arrows / A · D move — click / Space launches · Z laser · B cycles background"
+	sheet_hints.text = "arrows / A · D move — click / Space launches · Z laser — papers rotate every level"
 	sheet_hints.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	sheet_hints.add_theme_font_size_override("font_size", 12)
 	sheet_hints.add_theme_color_override("font_color", Color("#5b5347"))
@@ -1017,7 +1040,7 @@ func build_settings_menu() -> void:
 	bg_option.custom_minimum_size = Vector2(220, 0)
 	bg_row.add_child(bg_option)
 	box.add_child(bg_row)
-	refresh_bg_option()   # item 0 is always "(default gradient)" — select() here never fires item_selected
+	refresh_bg_option()   # item 0 is always "(auto — rotates per level)" — select() here never fires item_selected
 	var note := Label.new()
 	note.text = "Music: drop .ogg/.mp3/.wav into music/ · Backgrounds: drop PNGs into backgrounds/"
 	note.add_theme_color_override("font_color", Color("#5b5347"))
@@ -1102,19 +1125,25 @@ func _on_music_changed(v: float) -> void:
 
 func refresh_bg_option() -> void:   # rebuild the picker from the (re-)scanned name list
 	if bg_option == null: return
-	var current := bg_index + 1   # 0 = gradient, 1..n = names — select() must not fire item_selected
 	bg_option.clear()
-	bg_option.add_item("(default gradient)")
+	bg_option.add_item("(auto — rotates per level)")
 	for n in bg_names:
 		bg_option.add_item(str(n))
-	if current < 0 or current >= bg_option.item_count: current = 0
+	var current := 0   # item 0 = auto, 1..n = pinned sheets — select() must not fire item_selected
+	if String(settings.get("bg", "auto")) != "auto":
+		var i := bg_names.find(String(settings["bg"]))
+		if i >= 0: current = i + 1
+	if current >= bg_option.item_count: current = 0
 	bg_option.select(current)
 
-func _on_bg_selected(index: int) -> void:
+func _on_bg_selected(index: int) -> void:   # the picker is the only way to touch backgrounds now — B is retired, papers rotate by themselves
 	if index <= 0:
-		bg_index = -1   # "(default gradient)" — no PNG slot in use
-		bg_label_update()
+		settings["bg"] = "auto"
+		save_settings()
+		auto_background()
 	else:
+		settings["bg"] = str(bg_names[index - 1])
+		save_settings()
 		set_background(index - 1)
 
 # ---------------- Music (drop files in music/, manifest merges + dedups, shuffle via rr()) ----------------
@@ -1240,7 +1269,6 @@ func handle_key(name: String) -> void:   # JS keydown handler, lowercased key na
 		return
 	if screen != "game": return   # at the main menu the game keys are inert; Play/Settings/Leaderboards/Quit are GUI buttons
 	if name == " ": fire_laser()
-	if name == "b": set_background(bg_index + 1)
 	if name == "r" and state.over: restart()
 
 func handle_key_up(name: String) -> void: keys[name.to_lower()] = false
@@ -1540,7 +1568,6 @@ func _draw_menu_scene() -> void:   # the title screen: the game's own sky + dete
 			var mx: float = x0 + col * pitch
 			var my: float = FIELD_TOP + 26.0 + row * (CELL_H + 6.0)
 			rrect_path(mx, my, CELL_W, CELL_H, 4.0, Color(hex, 0.85))
-			rrect_path(mx + 5.0, my + 3.0, CELL_W - 10.0, CELL_H * 0.42, 3.0, Color(0.20, 0.18, 0.15, 0.13))   # same glassy top band the live blocks get
 	rrect_path(W / 2.0 - 60.0, H - 44.0, 120.0, 16.0, 8.0, COLOR_SLOTS["white"])
 	# an idle ball bouncing over the paddle — analytic ghost trail, zero per-frame bookkeeping
 	var btx: float = W / 2.0 + sin(bg_time * 0.7) * 170.0
@@ -1596,9 +1623,7 @@ func _draw() -> void:
 		var t = BLOCK_TYPES[b.t]
 		var col: Color = Color(b.color, 1.0)
 		col.a = 0.85 if t.indestructible else 0.6 + 0.4 * (float(b.hp) / max(float(t.hp), 1.0))
-		rrect_path(b.x, b.y, CELL_W, CELL_H, 4.0, col)
-		if not t.indestructible:
-			rrect_path(b.x + 5.0, b.y + 3.0, CELL_W - 10.0, CELL_H * 0.42, 3.0, Color(0.20, 0.18, 0.15, 0.13))   # glassy top band
+		rrect_path(b.x, b.y, CELL_W, CELL_H, 4.0, col)   # flat ink field — the glassy top band is gone: one unified surface across every brick hue
 		if t.stroke_alpha > 0.0:   # stroke-color alpha mirrors the globalAlpha lift before the canvas stroke
 			var stroke_col: Color = t.stroke
 			stroke_col.a = t.stroke_alpha
@@ -1697,14 +1722,10 @@ func _draw() -> void:
 		var fpha: float = 0.05 + 0.045 * sin(bg_time * 7.0)
 		draw_rect(wr, Color(0.87, 0.47, 0.10, fpha * minf(1.0, float(state.fever) / 1.2)))
 
-	# HUD pills — one rounded language: a soft-cornered card for the score, true pills for everything else; the LEVEL plate is gone (levels announce themselves, then live in the pause sheet)
-	rrect_path(8.0, 6.0, 152.0, 48.0, 12.0, Color(0.97, 0.94, 0.88, 0.88))   # score / hi
-	var pill_lives_w: float = 122.0 + float(maxi(int(state.lives), 0)) * 13.0
-	var low_life: bool = int(state.lives) == 1   # last life: the lives pill beats like a red panic heart
+	# HUD — flat on the sheet: the score card and the lives pill are gone (they read as shadow boxes over paper); combo/fever keep their pills, LEVEL stays announced-not-printed
+	var low_life: bool = int(state.lives) == 1   # last life: the lives text itself beats like a red panic heart
 	var life_beat: float = 0.5 + 0.5 * sin(bg_time * 6.0)
-	var lives_pill_col: Color = Color(0.66, 0.10, 0.08, 0.20 + 0.22 * life_beat) if low_life else Color(0.97, 0.94, 0.88, 0.86)
 	var lives_txt_col: Color = Color(0.62, 0.26, 0.22, 0.72 + 0.28 * life_beat) if low_life else COLOR_SLOTS["white"]
-	rrect_path(W - 16.0 - pill_lives_w, 6.0, pill_lives_w, 30.0, 15.0, lives_pill_col)   # lives — a pill that grows with the pips
 
 	# HUD — big score, small hi: a two-step hierarchy instead of two equal-weight lines
 	draw_string(font, Vector2(16, 28), "SCORE " + str(state.score), HORIZONTAL_ALIGNMENT_LEFT, -1.0, 18, COLOR_SLOTS["white"])
@@ -1731,12 +1752,12 @@ func _draw() -> void:
 	# the paused field needs no drawn overlay: the pause MENU (a Control card with its own dim) sits right on top of it now
 	if state.message != "":
 		banner(font, state.message)
-	# the background's file name used to be printed top-right; players never asked for it, so it's gone — B still cycles the set
+	# the background's file name used to be printed top-right; players never asked for it, so it's gone — and papers rotate on their own now
 
 	draw_set_transform(Vector2(0, 0), 0.0, Vector2(1, 1))
 
-func _draw_vignette(wr: Rect2) -> void:   # soft darkened frame that pulls the eye into the design field
-	var d := Color(0, 0, 0, 0.32)
+func _draw_vignette(wr: Rect2) -> void:   # soft darkened frame that pulls the eye into the design field — half strength: on wide windows the sides used to go muddy, and players noticed
+	var d := Color(0, 0, 0, 0.16)
 	var z := Color(0, 0, 0, 0.0)
 	var s: float = minf(130.0, wr.size.x * 0.10)
 	var b: float = minf(90.0, wr.size.y * 0.12)
@@ -1797,9 +1818,12 @@ func _ready() -> void:
 	if bg_count() == 0: load_backgrounds()
 	state.high = load_high()
 	load_leaderboard()
+	save_high()   # boot bank: every launch stamps both save files — user:// is guaranteed writable (4.7 data_paths docs), so "the save vanished" and "the save never ran" are now distinguishable by looking
+	save_settings()
+	apply_bg_setting()   # resolve auto-vs-pinned paper before the first level builds
 	print("board: " + str(leaderboard.size()) + " run(s)  ·  high " + str(state.high) + "  ·  data " + OS.get_user_data_dir())   # boot line: proves where saves live and what was found there
 	build_level()
-	flash_message("Click / space to launch · B for background", 3.5)
+	flash_message("Click / space to launch", 3.5)
 	mouse_filter = MOUSE_FILTER_STOP   # keyboard reaches _input when this control is focused
 	focus_mode = FOCUS_ALL
 	if screen != "menu": grab_focus()   # at boot the main menu owns focus — Play is the focused button
