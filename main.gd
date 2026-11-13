@@ -46,45 +46,45 @@ class RNG32:
 		return float(u32(s32(t) ^ ushift(t, 14))) / 4294967296.0
 
 const BLOCK_TYPES := {
-	"normal": { "hp": 1, "score": 10, "palette": ["#ef5350", "#ffa726", "#ffeb3b", "#66bb6a", "#42a5f5", "#ab47bc"], "label": "", "stroke": Color(0,0,0,0), "stroke_alpha": 0.0, "indestructible": false },
-	"tough": { "hp": 2, "score": 25, "palette": ["#8d6e63"], "label": "", "stroke": Color(0,0,0,0), "stroke_alpha": 0.0, "indestructible": false },
-	"tough3": { "hp": 3, "score": 40, "palette": ["#546e7a"], "label": "", "stroke": Color(0,0,0,0), "stroke_alpha": 0.0, "indestructible": false },
-	"explode": { "hp": 1, "score": 30, "palette": ["#ffee58"], "label": "*", "stroke": Color("#ff6f00", 1.0), "stroke_alpha": 1.0, "indestructible": false },
-	"steel": { "hp": 0, "score": 5, "palette": ["#78909c"], "label": "", "stroke": Color(0,0,0,0), "stroke_alpha": 0.0, "indestructible": true },
-	"gold": { "hp": 1, "score": 50, "palette": ["#ffd54f"], "label": "★", "stroke": Color("#ff8f00", 1.0), "stroke_alpha": 0.9, "indestructible": false },
+	"normal": { "hp": 1, "score": 10, "palette": ["#c8402e", "#c96f2a", "#c9a227", "#4c8a54", "#2a5f8f", "#7b5e8c"], "label": "", "stroke": Color(0,0,0,0), "stroke_alpha": 0.0, "indestructible": false },
+	"tough": { "hp": 2, "score": 25, "palette": ["#7a5c49"], "label": "", "stroke": Color(0,0,0,0), "stroke_alpha": 0.0, "indestructible": false },
+	"tough3": { "hp": 3, "score": 40, "palette": ["#3f5a66"], "label": "", "stroke": Color(0,0,0,0), "stroke_alpha": 0.0, "indestructible": false },
+	"explode": { "hp": 1, "score": 30, "palette": ["#d8c24a"], "label": "*", "stroke": Color("#a05210", 1.0), "stroke_alpha": 1.0, "indestructible": false },
+	"steel": { "hp": 0, "score": 5, "palette": ["#67757a"], "label": "", "stroke": Color(0,0,0,0), "stroke_alpha": 0.0, "indestructible": true },
+	"gold": { "hp": 1, "score": 50, "palette": ["#c9971f"], "label": "★", "stroke": Color("#a05210", 1.0), "stroke_alpha": 0.9, "indestructible": false },
 }
 
 const POWERUPS := {
-	"MULTI": { "letter": "M", "name": "Multiball", "good": true, "color": Color("#26a696"), "duration": 0.0 },
-	"EXPAND": { "letter": "W", "name": "Expand paddle", "good": true, "color": Color("#26a696"), "duration": 15.0 },
-	"SHRINK": { "letter": "S", "name": "Shrink paddle", "good": false, "color": Color("#e53935"), "duration": 10.0 },
-	"SLOW": { "letter": "T", "name": "Slow ball", "good": true, "color": Color("#26a696"), "duration": 12.0 },
-	"FAST": { "letter": "F", "name": "Fast ball (bad)", "good": false, "color": Color("#e53935"), "duration": 10.0 },
-	"LIFE": { "letter": "+", "name": "Extra life", "good": true, "color": Color("#26a696"), "duration": 0.0 },
-	"LASER": { "letter": "Z", "name": "Laser", "good": true, "color": Color("#26a696"), "duration": 12.0 },
-	"STICKY": { "letter": "C", "name": "Sticky paddle", "good": true, "color": Color("#26a696"), "duration": 15.0 },
-	"LAVA": { "letter": "L", "name": "Lava ball", "good": true, "color": Color("#ff7043"), "duration": 10.0 },
-	"SHIELD": { "letter": "G", "name": "Shield", "good": true, "color": Color("#42a5f5"), "duration": 8.0 },
+	"MULTI": { "letter": "M", "name": "Multiball", "good": true, "color": Color("#1e7268"), "duration": 0.0 },
+	"EXPAND": { "letter": "W", "name": "Expand paddle", "good": true, "color": Color("#1e7268"), "duration": 15.0 },
+	"SHRINK": { "letter": "S", "name": "Shrink paddle", "good": false, "color": Color("#a83326"), "duration": 10.0 },
+	"SLOW": { "letter": "T", "name": "Slow ball", "good": true, "color": Color("#1e7268"), "duration": 12.0 },
+	"FAST": { "letter": "F", "name": "Fast ball (bad)", "good": false, "color": Color("#a83326"), "duration": 10.0 },
+	"LIFE": { "letter": "+", "name": "Extra life", "good": true, "color": Color("#1e7268"), "duration": 0.0 },
+	"LASER": { "letter": "Z", "name": "Laser", "good": true, "color": Color("#1e7268"), "duration": 12.0 },
+	"STICKY": { "letter": "C", "name": "Sticky paddle", "good": true, "color": Color("#1e7268"), "duration": 15.0 },
+	"LAVA": { "letter": "L", "name": "Lava ball", "good": true, "color": Color("#b8501e"), "duration": 10.0 },
+	"SHIELD": { "letter": "G", "name": "Shield", "good": true, "color": Color("#2a5f8f"), "duration": 8.0 },
 }
 
 const COLOR_SLOTS := {
-	"white": Color("#ffffff", 1.0),
-	"white70": Color("#ffffff", 0.70),
-	"dim_white": Color("#ffffff", 0.4),
-	"dark_white": Color("#ffffff", 0.25),
+	"white": Color("#2b2620", 1.0),
+	"white70": Color("#2b2620", 0.70),
+	"dim_white": Color("#2b2620", 0.4),
+	"dark_white": Color("#2b2620", 0.25),
 	"dark_overlay": Color(0, 0, 0, 0.5),
 	"dim_overlay": Color(0, 0, 0, 0.28),
-	"banner_overlay": Color(0, 0, 0, 0.65),
-	"hud_dim": Color("#78909c", 1.0),
-	"hud_green": Color("#80cbc4", 1.0),
-	"hud_red": Color("#ef9a9a", 1.0),
-	"glow_blue": Color("#42a5f5", 1.0),
-	"glow_teal": Color("#26a696", 1.0),
-	"glow_red": Color("#ff1744", 1.0),
-	"glow_lava": Color("#ff7043", 1.0),
-	"brown_label": Color("#5d4037", 1.0),
-	"grad_top": Color("#0b1026", 1.0),
-	"grad_bottom": Color("#1a2340", 1.0),
+	"banner_overlay": Color(0.96, 0.93, 0.86, 0.92),
+	"hud_dim": Color("#67757a", 1.0),
+	"hud_green": Color("#25756b", 1.0),
+	"hud_red": Color("#9c4a3e", 1.0),
+	"glow_blue": Color("#2a5f8f", 1.0),
+	"glow_teal": Color("#1e7268", 1.0),
+	"glow_red": Color("#93202f", 1.0),
+	"glow_lava": Color("#b8501e", 1.0),
+	"brown_label": Color("#4a3826", 1.0),
+	"grad_top": Color("#f2e8d5", 1.0),
+	"grad_bottom": Color("#e6d7ba", 1.0),
 	"black": Color(0, 0, 0, 1.0),
 }
 
@@ -358,7 +358,7 @@ func start_fever() -> void:
 	schedule_tone(0.11, 659.0, 0.09, "square", 0.06)
 	schedule_tone(0.22, 784.0, 0.18, "square", 0.06)
 
-func boom(x: float, y: float, depth: int, col: Color = Color("#ffee58")) -> void:   # expanding shockwave ring — pure visual, zero rr
+func boom(x: float, y: float, depth: int, col: Color = Color("#d8c24a")) -> void:   # expanding shockwave ring — pure visual, zero rr
 	state.booms.append({"x": x, "y": y, "t": 0.0, "ttl": 0.44 if depth <= 1 else 0.34, "color": col, "r0": 16.0 + 10.0 * mini(depth, 4)})
 	if state.booms.size() > 26:
 		state.booms.pop_front()
@@ -366,14 +366,14 @@ func boom(x: float, y: float, depth: int, col: Color = Color("#ffee58")) -> void
 func do_explode(b, depth: int) -> void:   # a bomb dies: shockwave + 3×3 kill-wave; survivor bombs get fuses so the chain ROLLS like dominoes
 	var cx: float = b.x + CELL_W / 2.0
 	var cy: float = b.y + CELL_H / 2.0
-	boom(cx, cy, depth, Color("#ffd54f") if depth == 1 else Color("#ffb300"))
+	boom(cx, cy, depth, Color("#c9971f") if depth == 1 else Color("#ffb300"))
 	state.shake = maxf(float(state.shake), 6.0 + float(depth))
 	if depth >= 2:
 		schedule_tone(0.0, 120.0 + 30.0 * float(depth), 0.12, "sawtooth", 0.06)   # the wave whooshes deeper
 	var wave_bonus: int = int(10 * mini(depth, 5) * fever_mult())
 	state.score += wave_bonus
 	if depth == 1:
-		popup(cx, b.y - 10.0, "BOOM! +" + str(wave_bonus), Color("#ffee58"))
+		popup(cx, b.y - 10.0, "BOOM! +" + str(wave_bonus), Color("#d8c24a"))
 	for o in blocks_data.duplicate():   # snapshot: JS iterated a copy
 		if o == b:
 			continue
@@ -413,7 +413,7 @@ func destroy_block(b, fromExplosion: int = -1, _top_level: bool = true) -> void:
 			var tier: int = mini(int(state.combo / COMBO_STEP), 5)
 			var bonus: int = COMBO_BONUS * tier
 			state.score += bonus
-			popup(b.x + CELL_W / 2.0, b.y + CELL_H + 12.0, "COMBO ×" + str(state.combo) + "  +" + str(bonus), Color("#ffb74d"))
+			popup(b.x + CELL_W / 2.0, b.y + CELL_H + 12.0, "COMBO ×" + str(state.combo) + "  +" + str(bonus), Color("#8f5f1f"))
 			schedule_tone(0.0, 660.0 + 80.0 * float(tier), 0.12, "square", 0.05)
 		if float(state.fever) > 0.0:
 			state.fever = FEVER_TIME   # a kill during FEVER re-lights the clock — the streak keeps burning
@@ -488,8 +488,8 @@ func level_clear() -> void:
 	state.shake = maxf(float(state.shake), 9.0)
 	state.flash = 1.0
 	paddle["squash"] = 1.0
-	boom(paddle.x + state.paddleW / 2.0, paddle.y - 22.0, 1, Color(1, 1, 1, 1))
-	popup(paddle.x + state.paddleW / 2.0, paddle.y - 60.0, "LEVEL CLEAR +100", Color("#ffd54f"))
+	boom(paddle.x + state.paddleW / 2.0, paddle.y - 22.0, 1, Color(0.20, 0.18, 0.15, 1))
+	popup(paddle.x + state.paddleW / 2.0, paddle.y - 60.0, "LEVEL CLEAR +100", Color("#c9971f"))
 
 func lose_ball() -> void:
 	state.lives -= 1
@@ -727,17 +727,18 @@ func build_main_menu() -> void:
 	box.add_theme_constant_override("separation", 14)
 	main_menu_panel.add_child(box)
 	var title := Label.new()
-	title.text = "BREAKOUT"
-	title.add_theme_font_size_override("font_size", 58)
-	title.add_theme_color_override("font_color", Color(1, 1, 1, 0.97))
-	title.add_theme_color_override("font_shadow_color", Color("#42a5f5", 0.7))
+	title.text = "BRICK PRESS"
+	title.add_theme_font_override("font", load("res://fonts/ArchivoBlack-Regular.ttf"))
+	title.add_theme_font_size_override("font_size", 46)
+	title.add_theme_color_override("font_color", Color(0.20, 0.18, 0.15, 0.97))
+	title.add_theme_color_override("font_shadow_color", Color("#7a5c49", 0.35))
 	title.add_theme_constant_override("shadow_offset_x", 0)
 	title.add_theme_constant_override("shadow_offset_y", 3)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(title)
 	var sub := Label.new()
 	sub.text = "A · D / arrows move the paddle — click or space launches"
-	sub.add_theme_color_override("font_color", Color("#8fa8d8"))
+	sub.add_theme_color_override("font_color", Color("#6f6757"))
 	sub.add_theme_font_size_override("font_size", 14)
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART   # wrap inside the card instead of widening it
@@ -757,7 +758,7 @@ func build_main_menu() -> void:
 	box.add_child(quit_button)
 	var footer := Label.new()
 	footer.text = "Esc opens settings · F toggles fullscreen"
-	footer.add_theme_color_override("font_color", Color("#6f87b8"))
+	footer.add_theme_color_override("font_color", Color("#5b5347"))
 	footer.add_theme_font_size_override("font_size", 12)
 	footer.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(footer)
@@ -781,14 +782,15 @@ func build_leaderboard_panel() -> void:   # the submenu pattern, same trick as S
 	var head := Label.new()
 	head.text = "Leaderboards"
 	head.add_theme_font_size_override("font_size", 26)
-	head.add_theme_color_override("font_shadow_color", Color("#42a5f5", 0.55))
+	head.add_theme_color_override("font_color", Color("#2b2620", 0.95))
+	head.add_theme_color_override("font_shadow_color", Color("#7a5c49", 0.35))
 	head.add_theme_constant_override("shadow_offset_x", 0)
 	head.add_theme_constant_override("shadow_offset_y", 2)
 	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(head)
 	var sub := Label.new()
 	sub.text = "best local runs — saved on this computer"
-	sub.add_theme_color_override("font_color", Color("#8fa8d8"))
+	sub.add_theme_color_override("font_color", Color("#6f6757"))
 	sub.add_theme_font_size_override("font_size", 13)
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(sub)
@@ -834,7 +836,7 @@ func _refresh_leaderboard_rows() -> void:   # rebuild the submenu's rows — bes
 	if leaderboard.is_empty():
 		var e := Label.new()
 		e.text = "no runs yet — press Play and set something on the board"
-		e.add_theme_color_override("font_color", Color("#5d74a8"))
+		e.add_theme_color_override("font_color", Color("#4c463b"))
 		e.add_theme_font_size_override("font_size", 13)
 		e.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		leaderboard_rows.add_child(e)
@@ -843,7 +845,7 @@ func _refresh_leaderboard_rows() -> void:   # rebuild the submenu's rows — bes
 		var row := Label.new()
 		row.text = "%d.   %s   ·   level %d   ·   %s" % [i + 1, str(leaderboard[i].score), leaderboard[i].level, leaderboard[i].when]
 		row.add_theme_font_size_override("font_size", 15 if i == 0 else 13)
-		row.add_theme_color_override("font_color", Color("#ffd54f") if i == 0 else Color("#9fb4e0"))
+		row.add_theme_color_override("font_color", Color("#c9971f") if i == 0 else Color("#6f6757"))
 		row.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		leaderboard_rows.add_child(row)
 
@@ -867,7 +869,7 @@ func _btn_sb(col: Color, shadow: int) -> StyleBoxFlat:   # one rounded, softly-s
 	sb.bg_color = col
 	sb.set_corner_radius_all(10)
 	sb.set_border_width_all(1)
-	sb.border_color = Color(1, 1, 1, 0.10)
+	sb.border_color = Color(1, 1, 1, 0.12)   # hairline highlight inside an ink chip
 	sb.content_margin_left = 18.0
 	sb.content_margin_right = 18.0
 	sb.content_margin_top = 8.0
@@ -878,30 +880,30 @@ func _btn_sb(col: Color, shadow: int) -> StyleBoxFlat:   # one rounded, softly-s
 	return sb
 
 func _style_button(b: Button, accent := false) -> void:   # the whole button family in one place: soft ink-navy (or action-blue) pills instead of the stock grey chips
-	var base := Color("#2a52c8") if accent else Color("#182450", 0.94)
-	var hover := Color("#3b66e0") if accent else Color("#223064", 0.97)
-	var press := Color("#1d3ea0") if accent else Color("#0f1a3c", 0.98)
-	var states := [["normal", base, 5], ["hover", hover, 9], ["pressed", press, 2], ["focus", base, 5], ["disabled", Color(0.08, 0.1, 0.18, 0.6), 0]]
+	var base := Color("#2a5f8f") if accent else Color("#2b2620", 0.94)
+	var hover := Color("#35709f") if accent else Color("#3b352c", 0.97)
+	var press := Color("#214d77") if accent else Color("#1d1913", 0.98)
+	var states := [["normal", base, 5], ["hover", hover, 9], ["pressed", press, 2], ["focus", base, 5], ["disabled", Color(0.55, 0.52, 0.45, 0.55), 0]]
 	for s in states:
 		var sb := _btn_sb(s[1], s[2])
 		if s[0] == "focus":
-			sb.border_color = Color("#42a5f5", 0.55)   # a soft accent ring, not the default white box
+			sb.border_color = Color("#c9971f", 0.75)   # a marigold spot-color ring, not the default white box
 		b.add_theme_stylebox_override(s[0], sb)
-	b.add_theme_color_override("font_color", Color(1, 1, 1, 0.92))
-	b.add_theme_color_override("font_hover_color", Color(1, 1, 1, 1))
-	b.add_theme_color_override("font_pressed_color", Color(1, 1, 1, 0.85))
-	b.add_theme_color_override("font_focus_color", Color(1, 1, 1, 1))
-	b.add_theme_color_override("font_disabled_color", Color(1, 1, 1, 0.4))
+	b.add_theme_color_override("font_color", Color("#f4ecdb", 0.94))
+	b.add_theme_color_override("font_hover_color", Color("#faf4e6", 1))
+	b.add_theme_color_override("font_pressed_color", Color("#e8dfc8", 0.88))
+	b.add_theme_color_override("font_focus_color", Color("#faf4e6", 1))
+	b.add_theme_color_override("font_disabled_color", Color("#f4ecdb", 0.45))
 	b.focus_mode = Control.FOCUS_ALL   # keyboard reach survives the restyled ring
 
-func _card_style() -> StyleBoxFlat:   # opaque, rounded, soft-shadowed navy card — readable whatever is behind it
+func _card_style() -> StyleBoxFlat:   # opaque, rounded, soft-shadowed paper card — readable whatever is behind it
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color("#0c1230", 0.97)
-	sb.border_color = Color("#42a5f5", 0.32)
+	sb.bg_color = Color("#f4ecdb", 0.97)
+	sb.border_color = Color("#7a5c49", 0.38)
 	sb.set_border_width_all(1)   # hairline border — the shadow does the separating, not the frame
 	sb.set_corner_radius_all(18)
 	sb.set_content_margin_all(26.0)
-	sb.shadow_color = Color(0, 0, 0, 0.5)
+	sb.shadow_color = Color(0.18, 0.14, 0.09, 0.45)
 	sb.shadow_size = 26
 	sb.shadow_offset = Vector2(0, 10)
 	return sb
@@ -969,24 +971,26 @@ func build_settings_menu() -> void:
 	sheet_title.text = "Settings"
 	sheet_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	sheet_title.add_theme_font_size_override("font_size", 26)
+	sheet_title.add_theme_color_override("font_color", Color("#2b2620", 0.95))
 	box.add_child(sheet_title)
 	sheet_status = Label.new()
 	sheet_status.text = "everything here saves itself"
 	sheet_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	sheet_status.add_theme_font_size_override("font_size", 13)
-	sheet_status.add_theme_color_override("font_color", Color("#9fb4e0"))
+	sheet_status.add_theme_color_override("font_color", Color("#6f6757"))
 	box.add_child(sheet_status)
 	sheet_hints = Label.new()
 	sheet_hints.text = "arrows / A · D move — click / Space launches · Z laser · B cycles background"
 	sheet_hints.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	sheet_hints.add_theme_font_size_override("font_size", 12)
-	sheet_hints.add_theme_color_override("font_color", Color("#6f87b8"))
+	sheet_hints.add_theme_color_override("font_color", Color("#5b5347"))
 	sheet_hints.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART   # wrap inside the card, never widen it
 	sheet_hints.custom_minimum_size = Vector2(400, 0)
 	box.add_child(sheet_hints)
 	var res_row := HBoxContainer.new()
 	var res_lbl := Label.new()
 	res_lbl.text = "Resolution"
+	res_lbl.add_theme_color_override("font_color", Color("#4c463b"))
 	res_row.add_child(res_lbl)
 	res_option = OptionButton.new()
 	for s in _res_items:
@@ -996,6 +1000,7 @@ func build_settings_menu() -> void:
 	box.add_child(res_row)
 	fs_check = CheckButton.new()
 	fs_check.text = "Fullscreen"
+	fs_check.add_theme_color_override("font_color", Color("#4c463b"))
 	fs_check.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN   # a full-width CheckButton parks its toggle box at the far edge of the card — keep it snug beside the label
 	fs_check.set_pressed_no_signal(bool(settings.fullscreen))
 	box.add_child(fs_check)
@@ -1006,6 +1011,7 @@ func build_settings_menu() -> void:
 	var bg_row := HBoxContainer.new()
 	var bg_lbl := Label.new()
 	bg_lbl.text = "Background"
+	bg_lbl.add_theme_color_override("font_color", Color("#4c463b"))
 	bg_row.add_child(bg_lbl)
 	bg_option = OptionButton.new()
 	bg_option.custom_minimum_size = Vector2(220, 0)
@@ -1014,11 +1020,13 @@ func build_settings_menu() -> void:
 	refresh_bg_option()   # item 0 is always "(default gradient)" — select() here never fires item_selected
 	var note := Label.new()
 	note.text = "Music: drop .ogg/.mp3/.wav into music/ · Backgrounds: drop PNGs into backgrounds/"
+	note.add_theme_color_override("font_color", Color("#5b5347"))
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART   # keep the panel at its intended width
 	note.custom_minimum_size = Vector2(400, 0)   # stays inside the card's content width (460 - 2x24 margin)
 	box.add_child(note)
 	var note2 := Label.new()
 	note2.text = "Copy files in, focus the editor once (Godot imports them), re-open this menu"
+	note2.add_theme_color_override("font_color", Color("#5b5347"))
 	note2.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	note2.custom_minimum_size = Vector2(400, 0)
 	box.add_child(note2)
@@ -1057,6 +1065,7 @@ func _menu_row(text: String, slider: HSlider) -> HBoxContainer:
 	var row := HBoxContainer.new()
 	var lbl := Label.new()
 	lbl.text = text
+	lbl.add_theme_color_override("font_color", Color("#4c463b"))
 	row.add_child(lbl)
 	row.add_child(slider)
 	return row
@@ -1510,7 +1519,7 @@ func key_name(ev: InputEventKey) -> String:
 	return ""
 
 func _draw_menu_scene() -> void:   # the title screen: the game's own sky + deterministic stars + a decorative brick wall + idle paddle & ball, all scaled with the window
-	const MENU_PALETTE := ["#ef5350", "#ffa726", "#ffeb3b", "#66bb6a", "#42a5f5", "#ab47bc"]
+	const MENU_PALETTE := ["#c8402e", "#c96f2a", "#c9a227", "#4c8a54", "#2a5f8f", "#7b5e8c"]
 	var wr := _world_rect()
 	var top := COLOR_SLOTS["grad_top"]
 	var bot := COLOR_SLOTS["grad_bottom"]
@@ -1520,7 +1529,7 @@ func _draw_menu_scene() -> void:   # the title screen: the game's own sky + dete
 		var sy: float = wr.position.y + fposmod(float(i * 97 + 11) + bg_time * (2.0 + fposmod(float(i), 5.0)), wr.size.y * 0.72)
 		var wsz: float = 1.0 + fposmod(float(i * 7), 1.6)
 		var sa: float = 0.10 + fposmod(float(i * 13), 18) / 100.0 + 0.08 * sin(bg_time * 1.6 + float(i))
-		draw_rect(Rect2(sx, sy, wsz, wsz), Color(1, 1, 1, maxf(sa, 0.05)))
+		draw_rect(Rect2(sx, sy, wsz, wsz), Color(0.20, 0.18, 0.15, maxf(sa, 0.05)))
 	var pitch := CELL_W + 3.0
 	var x0: float = (W - 12.0 * pitch + 3.0) / 2.0
 	for row in 3:
@@ -1531,7 +1540,7 @@ func _draw_menu_scene() -> void:   # the title screen: the game's own sky + dete
 			var mx: float = x0 + col * pitch
 			var my: float = FIELD_TOP + 26.0 + row * (CELL_H + 6.0)
 			rrect_path(mx, my, CELL_W, CELL_H, 4.0, Color(hex, 0.85))
-			rrect_path(mx + 5.0, my + 3.0, CELL_W - 10.0, CELL_H * 0.42, 3.0, Color(1, 1, 1, 0.13))   # same glassy top band the live blocks get
+			rrect_path(mx + 5.0, my + 3.0, CELL_W - 10.0, CELL_H * 0.42, 3.0, Color(0.20, 0.18, 0.15, 0.13))   # same glassy top band the live blocks get
 	rrect_path(W / 2.0 - 60.0, H - 44.0, 120.0, 16.0, 8.0, COLOR_SLOTS["white"])
 	# an idle ball bouncing over the paddle — analytic ghost trail, zero per-frame bookkeeping
 	var btx: float = W / 2.0 + sin(bg_time * 0.7) * 170.0
@@ -1573,12 +1582,12 @@ func _draw() -> void:
 			var sgy: float = wr.position.y + fposmod(float(i * 149 + 17) + bg_time * (5.0 + fposmod(float(i * 31), 13.0)) * 0.45, wr.size.y * 0.86)
 			var sgs: float = 1.0 + fposmod(float(i * 7), 2.4)
 			var sga: float = 0.08 + 0.18 * (0.5 + 0.5 * sin(bg_time * 1.9 + float(i)))
-			draw_rect(Rect2(sgx, sgy, sgs, sgs), Color(1, 1, 1, sga))
+			draw_rect(Rect2(sgx, sgy, sgs, sgs), Color(0.20, 0.18, 0.15, sga))
 
 	# ball trails — fading ghosts kept under the bricks so gameplay stays readable (lava ghosts tint warm)
 	for tr in state.trail:
 		var fr: float = float(tr.life) / TRAIL_LIFE
-		var tcol: Color = Color("#ff8a50") if tr.hot else COLOR_SLOTS["white"]
+		var tcol: Color = Color("#b8541c") if tr.hot else COLOR_SLOTS["white"]
 		tcol.a = 0.16 * fr
 		draw_circle(Vector2(tr.x, tr.y), 2.0 + (BALL_R - 2.0) * fr, tcol)
 
@@ -1589,7 +1598,7 @@ func _draw() -> void:
 		col.a = 0.85 if t.indestructible else 0.6 + 0.4 * (float(b.hp) / max(float(t.hp), 1.0))
 		rrect_path(b.x, b.y, CELL_W, CELL_H, 4.0, col)
 		if not t.indestructible:
-			rrect_path(b.x + 5.0, b.y + 3.0, CELL_W - 10.0, CELL_H * 0.42, 3.0, Color(1, 1, 1, 0.13))   # glassy top band
+			rrect_path(b.x + 5.0, b.y + 3.0, CELL_W - 10.0, CELL_H * 0.42, 3.0, Color(0.20, 0.18, 0.15, 0.13))   # glassy top band
 		if t.stroke_alpha > 0.0:   # stroke-color alpha mirrors the globalAlpha lift before the canvas stroke
 			var stroke_col: Color = t.stroke
 			stroke_col.a = t.stroke_alpha
@@ -1633,9 +1642,9 @@ func _draw() -> void:
 	# shield band (SHIELD active): a glowing floor line across the whole visible world
 	if state.active.get("SHIELD", 0.0) > 0.0:
 		var shy: float = H   # the design-space floor — expand-stretch keeps it flush with the screen bottom on widescreen windows
-		var glow_sh: Color = Color(0.26, 0.65, 0.96, 0.22 + 0.10 * sin(bg_time * 6.0))
+		var glow_sh: Color = Color(0.10, 0.32, 0.50, 0.22 + 0.10 * sin(bg_time * 6.0))
 		draw_rect(Rect2(wr.position.x, shy - 12.0, wr.size.x, 16.0), glow_sh)
-		draw_rect(Rect2(wr.position.x, shy - 3.0, wr.size.x, 3.0), Color(0.72, 0.9, 1.0, 0.92))
+		draw_rect(Rect2(wr.position.x, shy - 3.0, wr.size.x, 3.0), Color(0.09, 0.28, 0.44, 0.92))
 
 	# paddle (glow approximated with a halo — canvas shadows have no direct Godot equivalent)
 	var glow_name: String = "glow_teal"
@@ -1653,7 +1662,7 @@ func _draw() -> void:
 	rrect_path(px - 4.0, py - 4.0, pw + 8.0, ph + 8.0, 10.0, glow_col)
 	rrect_path(px, py, pw, ph, 6.0, COLOR_SLOTS["white"])
 	if ph > 8.0:
-		rrect_path(px + 5.0, py + ph - 5.0, pw - 10.0, 4.0, 2.0, Color(0.62, 0.72, 0.88, 0.75))   # cool steel bottom edge
+		rrect_path(px + 5.0, py + ph - 5.0, pw - 10.0, 4.0, 2.0, Color(0.28, 0.30, 0.28, 0.75))   # cool steel bottom edge
 
 	# balls — squash & stretch along the flight vector: the faster it tears through the air, the more it elongates
 	var molten: bool = state.active.get("LAVA", 0.0) > 0.0
@@ -1664,16 +1673,16 @@ func _draw() -> void:
 		var bang: float = 0.0 if bool(b.stuck) else atan2(b.vy, b.vx)
 		draw_set_transform(Vector2(shake_x + b.x, shake_y + b.y), bang, Vector2(1.0 + st, 1.0 - st))
 		if molten:   # the lava ball: glowing orange core with a hot ember highlight
-			var lh: Color = Color("#ff8a50")
+			var lh: Color = Color("#b8541c")
 			lh.a = 0.45
 			draw_circle(Vector2.ZERO, 14.0, lh)
-			draw_circle(Vector2.ZERO, BALL_R, Color("#ff5722"))
-			draw_circle(Vector2(-3.0, -3.0), 3.5, Color("#ffd54f"))
+			draw_circle(Vector2.ZERO, BALL_R, Color("#a83c15"))
+			draw_circle(Vector2(-3.0, -3.0), 3.5, Color("#c9971f"))
 		else:
-			var halo: Color = Color(1.0, 0.86, 0.55, 1.0) if fevered else COLOR_SLOTS["white"]
+			var halo: Color = Color(0.72, 0.50, 0.15, 1.0) if fevered else COLOR_SLOTS["white"]
 			halo.a = 0.4
 			draw_circle(Vector2.ZERO, 13.0, halo)
-			draw_circle(Vector2.ZERO, BALL_R, Color(1.0, 0.97, 0.88, 1.0) if fevered else COLOR_SLOTS["white"])
+			draw_circle(Vector2.ZERO, BALL_R, Color(0.23, 0.20, 0.16, 1.0) if fevered else COLOR_SLOTS["white"])
 	draw_set_transform(Vector2(shake_x, shake_y), 0.0, Vector2(1, 1))
 
 	# floating popups — rise & fade, over the field but under the HUD so text stays crisp
@@ -1686,15 +1695,15 @@ func _draw() -> void:
 
 	if float(state.fever) > 0.0:   # FEVER heat — the whole field glows amber and breathes, and the tint dies away with the last second
 		var fpha: float = 0.05 + 0.045 * sin(bg_time * 7.0)
-		draw_rect(wr, Color(1.0, 0.53, 0.20, fpha * minf(1.0, float(state.fever) / 1.2)))
+		draw_rect(wr, Color(0.87, 0.47, 0.10, fpha * minf(1.0, float(state.fever) / 1.2)))
 
 	# HUD pills — one rounded language: a soft-cornered card for the score, true pills for everything else; the LEVEL plate is gone (levels announce themselves, then live in the pause sheet)
-	rrect_path(8.0, 6.0, 152.0, 48.0, 12.0, Color(0, 0, 0, 0.30))   # score / hi
+	rrect_path(8.0, 6.0, 152.0, 48.0, 12.0, Color(0.97, 0.94, 0.88, 0.88))   # score / hi
 	var pill_lives_w: float = 122.0 + float(maxi(int(state.lives), 0)) * 13.0
 	var low_life: bool = int(state.lives) == 1   # last life: the lives pill beats like a red panic heart
 	var life_beat: float = 0.5 + 0.5 * sin(bg_time * 6.0)
-	var lives_pill_col: Color = Color(0.45, 0.05, 0.10, 0.20 + 0.22 * life_beat) if low_life else Color(0, 0, 0, 0.26)
-	var lives_txt_col: Color = Color(1.0, 0.78, 0.76, 0.72 + 0.28 * life_beat) if low_life else COLOR_SLOTS["white"]
+	var lives_pill_col: Color = Color(0.66, 0.10, 0.08, 0.20 + 0.22 * life_beat) if low_life else Color(0.97, 0.94, 0.88, 0.86)
+	var lives_txt_col: Color = Color(0.62, 0.26, 0.22, 0.72 + 0.28 * life_beat) if low_life else COLOR_SLOTS["white"]
 	rrect_path(W - 16.0 - pill_lives_w, 6.0, pill_lives_w, 30.0, 15.0, lives_pill_col)   # lives — a pill that grows with the pips
 
 	# HUD — big score, small hi: a two-step hierarchy instead of two equal-weight lines
@@ -1703,13 +1712,13 @@ func _draw() -> void:
 	draw_string(font, Vector2(200.0, 26), "LIVES " + "●".repeat(maxi(state.lives, 0)), HORIZONTAL_ALIGNMENT_RIGHT, 744.0, 16, lives_txt_col)
 	if state.combo >= 3:   # combo pill — takes the retired level plate's slot up top, pulsing while the chain is hot
 		var cpsz: int = 14 + int(2.5 * (0.5 + 0.5 * sin(bg_time * 8.0)))
-		rrect_path(W / 2.0 - 80.0, 6.0, 160.0, 26.0, 13.0, Color(0, 0, 0, 0.30))
-		draw_string(font, Vector2(W / 2.0 - 76.0, 24.0), "COMBO ×" + str(state.combo), HORIZONTAL_ALIGNMENT_CENTER, 152.0, cpsz, Color("#ffb74d"))
+		rrect_path(W / 2.0 - 80.0, 6.0, 160.0, 26.0, 13.0, Color(0.97, 0.94, 0.88, 0.88))
+		draw_string(font, Vector2(W / 2.0 - 76.0, 24.0), "COMBO ×" + str(state.combo), HORIZONTAL_ALIGNMENT_CENTER, 152.0, cpsz, Color("#8f5f1f"))
 	if float(state.fever) > 0.0:   # FEVER pill — a countdown ember under the score plate, pulsing its border
 		var fpulse: float = 0.5 + 0.5 * sin(bg_time * 9.0)
 		rrect_path(16.0, 60.0, 158.0, 26.0, 13.0, Color(0.35, 0.12, 0.0, 0.45))
 		rrect_path(17.0, 61.0, 156.0, 24.0, 12.0, Color(1.0, 0.62, 0.15, 0.30 + 0.40 * fpulse), 1.5)
-		draw_string(font, Vector2(20.0, 78.0), "FEVER ×2  " + str(int(ceil(state.fever))) + "s", HORIZONTAL_ALIGNMENT_CENTER, 150.0, 14, Color("#ffcc80"))
+		draw_string(font, Vector2(20.0, 78.0), "FEVER ×2  " + str(int(ceil(state.fever))) + "s", HORIZONTAL_ALIGNMENT_CENTER, 150.0, 14, Color("#8a5a1d"))
 	var ty: float = H - 14.0
 	for k in state.active.keys():
 		var p = POWERUPS[k]
@@ -1718,7 +1727,7 @@ func _draw() -> void:
 		ty -= 18.0
 
 	if state.flash > 0.0:
-		draw_rect(wr, Color(1, 1, 1, 0.055 * float(state.flash)))   # pickup flash — the whole screen blinks
+		draw_rect(wr, Color(0.20, 0.18, 0.15, 0.055 * float(state.flash)))   # pickup flash — the whole screen blinks
 	# the paused field needs no drawn overlay: the pause MENU (a Control card with its own dim) sits right on top of it now
 	if state.message != "":
 		banner(font, state.message)

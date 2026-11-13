@@ -2,7 +2,7 @@
 .godot/
 
 # ---- build output ----
-# Breakout.exe is ~111 MB: it ships as a GitHub Release asset, and GitHub
+# Breakout.exe is ~120 MB: it ships as a GitHub Release asset, and GitHub
 # refuses regular git blobs over 100 MB anyway. Re-export with:
 #   godot --headless --path breakout-game-godot \
 #     --export-release "Windows Desktop" build/Breakout.exe
@@ -18,6 +18,9 @@ build/
 # %APPDATA%\Breakout Godot (Godot 4.7 has no --user-data-dir flag — see DEV-NOTES.md)
 .test_userdata/
 .dev_userdata/
+# pressed-paper redesign scratch: Python bytecode + per-direction mockups (tools/mock_up.py)
+__pycache__/
+_mocks/
 
 # ---- local dev notes (machine-specific paths; deliberately untracked) ----
 DEV-NOTES.md

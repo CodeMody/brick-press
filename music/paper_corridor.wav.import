@@ -3,12 +3,12 @@
 importer="wav"
 type="AudioStreamWAV"
 uid="uid://de6d60drt36vn"
-path="res://.godot/imported/neon_corridor.wav-8a8b3419910c2b52ca6bdeae30b14a64.sample"
+path="res://.godot/imported/paper_corridor.wav-95a52989424541d9843a99b4c28e0431.sample"
 
 [deps]
 
-source_file="res://music/neon_corridor.wav"
-dest_files=["res://.godot/imported/neon_corridor.wav-8a8b3419910c2b52ca6bdeae30b14a64.sample"]
+source_file="res://music/paper_corridor.wav"
+dest_files=["res://.godot/imported/paper_corridor.wav-95a52989424541d9843a99b4c28e0431.sample"]
 
 [params]
 
