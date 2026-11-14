@@ -26,6 +26,7 @@ func _initialize() -> void:
 	await create_timer(0.45).timeout
 	game.destroy_block(game.blocks()[0], -1)   # a real kill: floating +score popup, sparks
 	game.apply_powerup("SHIELD")
+	game.state.message = ""             # hero shot stays popup-free — the Shield band + HUD timers do the talking
 	game.state.combo = 6                        # warm the pulsing combo pill for the shot
 	await create_timer(0.55).timeout
 	_snap(game, "5_fun")
