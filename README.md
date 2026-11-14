@@ -8,7 +8,7 @@ A juice-heavy arcade brick-breaker, printed flat: smash through twelve seeded br
 
 ## Run
 
-> **Players**: the Windows build lives under **Releases** — one self-contained `Breakout.exe`, no install (saves: `%APPDATA%\Godot\app_userdata\Breakout Godot\` — yes, the folder is still named after the old title; renaming it would orphan your scores).
+> **Players**: the Windows **and Linux** builds live under **Releases** — one self-contained `Breakout.exe` (Windows) and `Breakout-linux-x86_64.tar.gz` (Linux: extract, then `./Breakout.x86_64` — no install; needs only glibc 2.28+, i.e. any distro from ~2018 on, and a normal OpenGL 3.3+ / Vulkan driver; both X11 and Wayland work). Saves: `%APPDATA%\Godot\app_userdata\Breakout Godot\` on Windows, `~/.local/share/godot/app_userdata/Breakout Godot/` on Linux — yes, the folder is still named after the old title; renaming it would orphan your scores.
 
 From source, open `project.godot` in **Godot 4.7+** (tested on 4.7.2 stable) and press F5, or:
 

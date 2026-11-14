@@ -59,7 +59,7 @@ const POWERUPS := {
 	"EXPAND": { "letter": "W", "name": "Expand paddle", "good": true, "color": Color("#1e7268"), "duration": 15.0 },
 	"SHRINK": { "letter": "S", "name": "Shrink paddle", "good": false, "color": Color("#a83326"), "duration": 10.0 },
 	"SLOW": { "letter": "T", "name": "Slow ball", "good": true, "color": Color("#1e7268"), "duration": 12.0 },
-	"FAST": { "letter": "F", "name": "Fast ball (bad)", "good": false, "color": Color("#a83326"), "duration": 10.0 },
+	"FAST": { "letter": "F", "name": "Fast ball", "good": false, "color": Color("#a83326"), "duration": 10.0 },
 	"LIFE": { "letter": "+", "name": "Extra life", "good": true, "color": Color("#1e7268"), "duration": 0.0 },
 	"LASER": { "letter": "Z", "name": "Laser", "good": true, "color": Color("#1e7268"), "duration": 12.0 },
 	"STICKY": { "letter": "C", "name": "Sticky paddle", "good": true, "color": Color("#1e7268"), "duration": 15.0 },
@@ -89,7 +89,7 @@ const COLOR_SLOTS := {
 }
 
 var state := {
-	"running": true, "paused": false, "over": false, "message": "", "msgTimer": 0.0,
+	"running": true, "paused": false, "over": false, "message": "", "msgTimer": 0.0, "msgPlain": false,
 	"score": 0, "high": 0, "level": 1, "lives": 3,
 	"paddleW": PADDLE_BASE_W,
 	"active": {},
@@ -453,7 +453,7 @@ func apply_powerup(key: String) -> void:
 	var p = POWERUPS[key]
 	if p.good: play_tone(880, 0.12, "sine", 0.08)
 	else: play_tone(220, 0.12, "square", 0.08)
-	flash_message(p.name + ("!" if p.good else "! (unlucky)"), 1.2)
+	flash_message(p.name + "!", 1.2, true)
 	state.flash = 0.45
 	if key == "SHIELD":
 		play_tone(520, 0.25, "sine", 0.05)   # soft energy-hum layer for the floor barrier
@@ -486,9 +486,10 @@ func normalize_speeds() -> void:
 		b.vx = b.vx / m * s
 		b.vy = b.vy / m * s
 
-func flash_message(text: String, secs: float) -> void:
+func flash_message(text: String, secs: float, plain: bool = false) -> void:
 	state.message = text
 	state.msgTimer = secs
+	state.msgPlain = plain
 
 func popup(x: float, y: float, text: String, col: Color) -> void:   # floating rising text — score gains, combo payouts
 	state.popups.append({"x": x, "y": y, "text": text, "ttl": POPUP_LIFE, "color": col})
@@ -1751,7 +1752,10 @@ func _draw() -> void:
 		draw_rect(wr, Color(0.20, 0.18, 0.15, 0.055 * float(state.flash)))   # pickup flash — the whole screen blinks
 	# the paused field needs no drawn overlay: the pause MENU (a Control card with its own dim) sits right on top of it now
 	if state.message != "":
-		banner(font, state.message)
+		if state.msgPlain:   # powerup shout — no banner box, just black ink on the paper
+			draw_string(font, Vector2(0.0, H / 2.0 + 12.0), state.message, HORIZONTAL_ALIGNMENT_CENTER, float(W), 34, COLOR_SLOTS["black"])
+		else:
+			banner(font, state.message)
 	# the background's file name used to be printed top-right; players never asked for it, so it's gone — and papers rotate on their own now
 
 	draw_set_transform(Vector2(0, 0), 0.0, Vector2(1, 1))
