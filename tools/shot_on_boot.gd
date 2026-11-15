@@ -26,6 +26,7 @@ func _initialize() -> void:
 	await create_timer(0.45).timeout
 	game.destroy_block(game.blocks()[0], -1)   # a real kill: floating +score popup, sparks
 	game.apply_powerup("SHIELD")
+	game.state.drops = [{"key": "LAVA", "x": 300.0, "y": 430.0, "vy": 0.0}, {"key": "SHIELD", "x": 645.0, "y": 395.0, "vy": 0.0}]   # parked pixel-sprite drops so the hero shot shows the new icons (vy 0 hovers them clear of the paddle band)
 	game.state.message = ""             # hero shot stays popup-free — the Shield band + HUD timers do the talking
 	game.state.combo = 6                        # warm the pulsing combo pill for the shot
 	await create_timer(0.55).timeout

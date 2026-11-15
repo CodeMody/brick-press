@@ -229,7 +229,7 @@ func _initialize() -> void:   # SceneTree main-loop entry via -s; root exists he
 	check(game.menu_open == false and game.screen == "game", "the toggle closes the sheet back to the game")
 
 	# ---- lava ball + laser melts steel (new feature checks, appended) ----
-	check(game.POWERUPS.has("LAVA") and game.POWERUPS["LAVA"].letter == "L" and game.POWERUPS["LAVA"].good and float(game.POWERUPS["LAVA"].duration) > 0.0, "LAVA power-up registered (L capsule, good, timed)")
+	check(game.POWERUPS.has("LAVA") and game.POWERUPS["LAVA"].letter == "L" and game.POWERUPS["LAVA"].good and float(game.POWERUPS["LAVA"].duration) > 0.0, "LAVA power-up registered (letter L, good, timed)")
 	game.menu_open = false
 	game.state.paused = false
 	game.state.drops = []
@@ -263,7 +263,20 @@ func _initialize() -> void:   # SceneTree main-loop entry via -s; root exists he
 
 	# ---- gold blocks, shield floor-guard, combo system (the big expansion pass) ----
 	game.override_rand = 0.95   # unfavourable roll from here on: only gold's forced drop may fall in this section
-	check(game.POWERUPS.has("SHIELD") and game.POWERUPS["SHIELD"].letter == "G" and game.POWERUPS["SHIELD"].good and float(game.POWERUPS["SHIELD"].duration) > 0.0, "SHIELD power-up registered (G capsule, good, timed)")
+	check(game.POWERUPS.has("SHIELD") and game.POWERUPS["SHIELD"].letter == "G" and game.POWERUPS["SHIELD"].good and float(game.POWERUPS["SHIELD"].duration) > 0.0, "SHIELD power-up registered (letter G, good, timed)")
+	var icons_ok := true
+	for k in game.POWERUPS.keys():
+		var icon: Array = game.POWERUPS[k].icon
+		var inked := 0
+		if icon.size() != 9:
+			icons_ok = false
+		for row in icon:
+			if row.length() != 13:
+				icons_ok = false
+			inked += row.length() - row.count(".")   # all-blank padding rows are legal — an all-blank icon is not
+		if inked == 0:
+			icons_ok = false
+	check(icons_ok, "every power-up ships a well-formed 13x9 pixel icon (the capsule letters are legacy data now)")
 	check(game.blockTypes.has("gold") and int(game.blockTypes["gold"].score) == 50 and not game.blockTypes["gold"].indestructible, "gold block registered (50 pts, destructible)")
 	game.state.drops = []
 	var gold_a = {"c": 1, "r": 11, "t": "gold", "hp": 1, "color": "#ffd54f", "x": 240.0, "y": 500.0}

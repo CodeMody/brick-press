@@ -27,6 +27,7 @@ const FEVER_TRIGGER := 10  # combo hits needed to ignite FEVER mode
 const FEVER_TIME := 8.0    # seconds — every kill during FEVER re-lights the clock
 const FEVER_BONUS := 100   # the parting gift when the heat finally goes cold
 const CHAIN_FUSE := 0.13   # seconds before a lit domino bomb pops — the chain visibly rolls
+const PU_PIXEL := 2.0      # screen px per icon pixel — the 13x9 POWERUPS sprites draw at up to 26x18 px
 
 # mulberry32 exact emulation (32-bit semantics on GDScript's 64-bit ints)
 class RNG32:
@@ -54,17 +55,20 @@ const BLOCK_TYPES := {
 	"gold": { "hp": 1, "score": 50, "palette": ["#c9971f"], "label": "★", "stroke": Color("#a05210", 1.0), "stroke_alpha": 0.9, "indestructible": false },
 }
 
+# Power-up drops render as pixel-art sprites, never letters: "icon" is a 13x9 char grid drawn at PU_PIXEL px.
+# Legend: "." transparent · F fill (p.color) · D dark edge (darkened 0.45) · L light edge (lightened 0.35,
+# light from top-left) · K ink (COLOR_SLOTS white) · W paper-white glint — applied by draw_pixel_icon.
 const POWERUPS := {
-	"MULTI": { "letter": "M", "name": "Multiball", "good": true, "color": Color("#1e7268"), "duration": 0.0 },
-	"EXPAND": { "letter": "W", "name": "Expand paddle", "good": true, "color": Color("#1e7268"), "duration": 15.0 },
-	"SHRINK": { "letter": "S", "name": "Shrink paddle", "good": false, "color": Color("#a83326"), "duration": 10.0 },
-	"SLOW": { "letter": "T", "name": "Slow ball", "good": true, "color": Color("#1e7268"), "duration": 12.0 },
-	"FAST": { "letter": "F", "name": "Fast ball", "good": false, "color": Color("#a83326"), "duration": 10.0 },
-	"LIFE": { "letter": "+", "name": "Extra life", "good": true, "color": Color("#1e7268"), "duration": 0.0 },
-	"LASER": { "letter": "Z", "name": "Laser", "good": true, "color": Color("#1e7268"), "duration": 12.0 },
-	"STICKY": { "letter": "C", "name": "Sticky paddle", "good": true, "color": Color("#1e7268"), "duration": 15.0 },
-	"LAVA": { "letter": "L", "name": "Lava ball", "good": true, "color": Color("#b8501e"), "duration": 10.0 },
-	"SHIELD": { "letter": "G", "name": "Shield", "good": true, "color": Color("#2a5f8f"), "duration": 8.0 },
+	"MULTI": { "letter": "M", "name": "Multiball", "good": true, "color": Color("#1e7268"), "duration": 0.0, "icon": [".....LL......", "....LFFD.....", "....LFFD.....", ".....DD......", ".............", "..LL......LL.", ".LFFD...LFFD.", ".LFFD...LFFD.", "..DD......DD."] },
+	"EXPAND": { "letter": "W", "name": "Expand paddle", "good": true, "color": Color("#1e7268"), "duration": 15.0, "icon": [".............", ".............", "..K.......K..", ".KK.LLLLL.KK.", "KKK.FFFFF.KKK", ".KK.DDDDD.KK.", "..K.......K..", ".............", "............."] },
+	"SHRINK": { "letter": "S", "name": "Shrink paddle", "good": false, "color": Color("#a83326"), "duration": 10.0, "icon": [".............", ".............", "K...........K", "KK...LLL...KK", "KKK..FFF..KKK", "KK...DDD...KK", "K...........K", ".............", "............."] },
+	"SLOW": { "letter": "T", "name": "Slow ball", "good": true, "color": Color("#1e7268"), "duration": 12.0, "icon": ["....LLLLL....", "...LFFFFFD...", "..LFFFKFFFD..", "..LFFFKFFFD..", "..LFFFKKKFD..", "..LFFFFFFFD..", "..LFFFFFFFD..", "...FFFFFFD...", "....DDDDD...."] },
+	"FAST": { "letter": "F", "name": "Fast ball", "good": false, "color": Color("#a83326"), "duration": 10.0, "icon": [".............", "....KKK......", "....KKK......", "...KKKKKKKKK.", "...KKK..K....", "......KKK....", "......KKK....", ".......KK....", "............."] },
+	"LIFE": { "letter": "+", "name": "Extra life", "good": true, "color": Color("#1e7268"), "duration": 0.0, "icon": ["..LLL...LLL..", ".LWFFF.FFFFD.", ".LFFFFFFFFFD.", ".LFFFFFFFFFD.", "..LFFFFFFFD..", "...FFFFFFD...", "....FFFFD....", ".....FFD.....", "......D......"] },
+	"LASER": { "letter": "Z", "name": "Laser", "good": true, "color": Color("#1e7268"), "duration": 12.0, "icon": [".............", "...KK...KK...", "...KK...KK...", "...KK...KK...", "...KK...KK...", "...KK...KK...", "..LLLLLLLLL..", "..FFFFFFFFD..", "..DDDDDDDDD.."] },
+	"STICKY": { "letter": "C", "name": "Sticky paddle", "good": true, "color": Color("#1e7268"), "duration": 15.0, "icon": ["......L......", ".....LFF.....", "....LFFFD....", "...LFFFFFD...", "..LFFFFFFFD..", "...FFFFFFD...", ".............", "......FF.....", "......FD....."] },
+	"LAVA": { "letter": "L", "name": "Lava ball", "good": true, "color": Color("#b8501e"), "duration": 10.0, "icon": ["......F......", ".....LFF.....", "....LLFFF....", "...LLLFFFF...", "..LLLFFFFFD..", ".DLLFFFDDDDD.", ".DDDDDDDDDDD.", "..DDDDDDDDD..", "............."] },
+	"SHIELD": { "letter": "G", "name": "Shield", "good": true, "color": Color("#2a5f8f"), "duration": 8.0, "icon": [".DDDDDDDDDDD.", ".DLLLLLLLLLD.", ".DLFFFKFFFFD.", ".DLFFFFFFFFD.", ".DLFFFFFFFFD.", "..FFFFFFFFD..", "...FFFFFFD...", "....FFFFD....", ".....FFD....."] },
 }
 
 const COLOR_SLOTS := {
@@ -1852,16 +1856,15 @@ func _draw() -> void:
 	for l in state.lasers:
 		draw_rect(Rect2(l.x - 2.0, l.y - 14.0, 4.0, 14.0), COLOR_SLOTS["glow_red"])
 
-	# drops — bobbing capsules with a softly pulsing halo
+	# drops — bobbing pixel-art power-up sprites over a softly pulsing halo (same halo language as the balls)
 	for d in state.drops:
 		var p = POWERUPS[d.key]
 		var bob: float = sin(bg_time * 3.0 + float(d.x) * 0.05) * 1.6
 		var dyc: float = d.y + bob
 		var halo: Color = p.color
 		halo.a = 0.26 + 0.12 * sin(bg_time * 5.0 + float(d.x))
-		rrect_path(d.x - 19.0, dyc - 13.0, 38.0, 26.0, 8.0, halo)
-		rrect_path(d.x - 16.0, dyc - 10.0, 32.0, 20.0, 6.0, p.color)
-		draw_string(font, Vector2(d.x - 20.0, dyc + 5.0), p.letter, HORIZONTAL_ALIGNMENT_CENTER, 40.0, 14, COLOR_SLOTS["white"])
+		draw_circle(Vector2(d.x, dyc), 16.0, halo)
+		draw_pixel_icon(d.x, dyc, p.icon, p.color)
 
 	# particles
 	for p in state.particles:
@@ -2009,6 +2012,28 @@ func rrect_path(x: float, y: float, w: float, h: float, r: float, col: Color, st
 		draw_polyline(pts, col, stroke_w)
 	else:
 		draw_colored_polygon(pts, col)
+
+# pixel-art power-up sprite stamped centered on (cx, cy): each char of the 13x9 grid is a PU_PIXEL square
+# "." transparent · F fill · D dark edge · L light edge (light from top-left) · K ink · W paper-white glint
+func draw_pixel_icon(cx: float, cy: float, rows: Array, col: Color) -> void:
+	var dark: Color = col.darkened(0.45)
+	var light: Color = col.lightened(0.35)
+	var ink: Color = COLOR_SLOTS["white"]
+	var glint := Color(1.0, 1.0, 0.85, 1.0)
+	var y0: float = cy - rows.size() * PU_PIXEL / 2.0
+	for r in rows.size():
+		var row: String = rows[r]
+		var x0: float = cx - row.length() * PU_PIXEL / 2.0
+		for c in row.length():
+			var px: Color
+			match row[c]:
+				"F": px = col
+				"D": px = dark
+				"L": px = light
+				"K": px = ink
+				"W": px = glint
+				_: continue
+			draw_rect(Rect2(x0 + c * PU_PIXEL, y0 + r * PU_PIXEL, PU_PIXEL, PU_PIXEL), px)
 
 # ---------------- Boot ----------------
 func _ready() -> void:
