@@ -14,7 +14,7 @@ const GRID_COLS := 12
 const CELL_W := 72.0
 const CELL_H := 26.0
 const GAP := 3.0
-const FIELD_TOP := 70.0
+const FIELD_TOP := 55.0
 const DROP_CHANCE := 0.12
 const DROP_SPEED := 140.0
 const TRAIL_LIFE := 0.3
@@ -102,6 +102,20 @@ var state := {
 var paddle := {"x": W / 2 - PADDLE_BASE_W / 2, "y": H - 40.0, "squash": 0.0}
 var keys := {}
 var mouse_x: Variant = null
+
+# ---------------- Mobile touch input state ----------------
+var touch_id_left: int = -1        # finger tracking left-side joystick
+var touch_id_right: int = -1       # finger tracking right-side tap zone
+var touch_pos_left: Vector2 = Vector2.INF
+var touch_pos_right: Vector2 = Vector2.INF
+var joystick_active: bool = false  # is left-side touch currently active?
+var joystick_origin: Vector2 = Vector2(80.0, H - 100.0)  # joystick center
+var joystick_radius: float = 50.0  # joystick visual radius
+var joystick_stick: Vector2 = Vector2.ZERO  # current stick displacement
+var pause_button_rect := Rect2(16.0, 84.0, 45.0, 34.0)  # pause button area (top-left, under the score/hi/fever stack)
+var touch_hint_timer: float = 0.0  # fade timer for the on-screen instruction
+var touch_hint_visible: bool = true  # show hint during first few seconds of play
+var _touch_seen := false              # flips true the first time a real finger lands — proves touch without trusting hardware probes
 var bg_time := 0.0   # free-running visual clock (star drift/twinkle, bobbing, pulses) — never consumes the rr() stream
 var sticky_ball: Variant = null
 var blocks_data: Array = []
@@ -532,7 +546,7 @@ func game_over() -> void:
 		add_leaderboard_entry(int(state.score), int(state.level))
 	save_high()
 	_refresh_leaderboard_rows()
-	flash_message("GAME OVER — click or press R", 999.0)
+	flash_message("GAME OVER — tap the screen to restart" if _is_touch_device() else "GAME OVER — click or press R", 999.0)
 
 # ---------------- Leaderboard (locally stored best runs, shown on the main menu card) ----------------
 const BOARD_MAX := 8   # best runs kept on disk — the submenu card lists them all
@@ -614,6 +628,7 @@ var fs_check: CheckButton
 var sfx_slider: HSlider
 var music_slider: HSlider
 var bg_option: OptionButton
+var bg_cycle: Button   # the phone's stand-in for bg_option — Android hangs when an OptionButton opens its popup window
 var back_button: Button
 var screen := "menu"   # "menu" = main menu shown (game frozen behind it) | "game" = playing / paused / game over
 var main_menu_panel: PanelContainer
@@ -680,6 +695,7 @@ func apply_settings_at_boot() -> void:
 		_resize_window(str(settings["size"]))
 
 func _resize_window(size_str: String) -> void:
+	if _is_mobile_os(): return   # on a phone the window IS the screen — asking Android for 1280x720 just wedges the frame loop, it never resizes anything
 	var parts := size_str.split("x")
 	if parts.size() != 2: return
 	get_window().size = Vector2i(int(parts[0]), int(parts[1]))
@@ -720,7 +736,7 @@ func _refresh_menu_sheet() -> void:   # one sheet, two faces: PAUSED over a live
 	var in_game := screen == "game"
 	sheet_title.text = "Paused" if in_game else "Settings"
 	sheet_status.text = ("LEVEL " + str(state.level) + "  ·  SCORE " + str(state.score) + "  ·  LIVES " + "●".repeat(maxi(int(state.lives), 0))) if in_game else "everything here saves itself"
-	sheet_status.add_theme_font_size_override("font_size", 15 if in_game else 13)
+	sheet_status.add_theme_font_size_override("font_size", 14 if in_game else 12)
 	sheet_hints.visible = in_game
 	pause_row.visible = in_game
 	back_button.visible = not in_game
@@ -745,15 +761,15 @@ func build_main_menu() -> void:
 	main_menu_panel = PanelContainer.new()
 	main_menu_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	main_menu_panel.add_theme_stylebox_override("panel", _card_style())
-	main_menu_panel.custom_minimum_size = Vector2(400, 500)   # four big buttons + title + footer — no leaderboard rows inside anymore, that's a submenu of its own
+	main_menu_panel.custom_minimum_size = Vector2(440, 520)   # four big buttons + title + footer — no leaderboard rows inside anymore, that's a submenu of its own
 	add_child(main_menu_panel)
 	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 14)
+	box.add_theme_constant_override("separation", 12)
 	main_menu_panel.add_child(box)
 	var title := Label.new()
 	title.text = "BRICK PRESS"
 	title.add_theme_font_override("font", load("res://fonts/ArchivoBlack-Regular.ttf"))
-	title.add_theme_font_size_override("font_size", 46)
+	title.add_theme_font_size_override("font_size", 38)
 	title.add_theme_color_override("font_color", Color(0.20, 0.18, 0.15, 0.97))
 	title.add_theme_color_override("font_shadow_color", Color("#7a5c49", 0.35))
 	title.add_theme_constant_override("shadow_offset_x", 0)
@@ -761,9 +777,9 @@ func build_main_menu() -> void:
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(title)
 	var sub := Label.new()
-	sub.text = "A · D / arrows move the paddle — click or space launches"
+	sub.text = "Drag the left half to move · Tap the right half to launch" if _is_touch_device() else "A · D / arrows move the paddle — click or space launches"
 	sub.add_theme_color_override("font_color", Color("#6f6757"))
-	sub.add_theme_font_size_override("font_size", 14)
+	sub.add_theme_font_size_override("font_size", 13)
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART   # wrap inside the card instead of widening it
 	sub.custom_minimum_size = Vector2(340, 0)
@@ -781,7 +797,7 @@ func build_main_menu() -> void:
 	box.add_child(leaderboard_button)
 	box.add_child(quit_button)
 	var footer := Label.new()
-	footer.text = "Esc opens settings · F toggles fullscreen"
+	footer.text = "Pause button top-left · The left half moves the paddle" if _is_touch_device() else "Esc opens settings · F toggles fullscreen"
 	footer.add_theme_color_override("font_color", Color("#5b5347"))
 	footer.add_theme_font_size_override("font_size", 12)
 	footer.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -798,14 +814,14 @@ func build_leaderboard_panel() -> void:   # the submenu pattern, same trick as S
 	leaderboard_panel = PanelContainer.new()
 	leaderboard_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	leaderboard_panel.add_theme_stylebox_override("panel", _card_style())
-	leaderboard_panel.custom_minimum_size = Vector2(460, 430)
+	leaderboard_panel.custom_minimum_size = Vector2(480, 450)
 	add_child(leaderboard_panel)
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 10)
 	leaderboard_panel.add_child(box)
 	var head := Label.new()
 	head.text = "Leaderboards"
-	head.add_theme_font_size_override("font_size", 26)
+	head.add_theme_font_size_override("font_size", 24)
 	head.add_theme_color_override("font_color", Color("#2b2620", 0.95))
 	head.add_theme_color_override("font_shadow_color", Color("#7a5c49", 0.35))
 	head.add_theme_constant_override("shadow_offset_x", 0)
@@ -815,7 +831,7 @@ func build_leaderboard_panel() -> void:   # the submenu pattern, same trick as S
 	var sub := Label.new()
 	sub.text = "best local runs — saved on this computer"
 	sub.add_theme_color_override("font_color", Color("#6f6757"))
-	sub.add_theme_font_size_override("font_size", 13)
+	sub.add_theme_font_size_override("font_size", 12)
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(sub)
 	leaderboard_rows = VBoxContainer.new()
@@ -861,14 +877,14 @@ func _refresh_leaderboard_rows() -> void:   # rebuild the submenu's rows — bes
 		var e := Label.new()
 		e.text = "no runs yet — press Play and set something on the board"
 		e.add_theme_color_override("font_color", Color("#4c463b"))
-		e.add_theme_font_size_override("font_size", 13)
+		e.add_theme_font_size_override("font_size", 12)
 		e.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		leaderboard_rows.add_child(e)
 		return
 	for i in leaderboard.size():
 		var row := Label.new()
 		row.text = "%d.   %s   ·   level %d   ·   %s" % [i + 1, str(leaderboard[i].score), leaderboard[i].level, leaderboard[i].when]
-		row.add_theme_font_size_override("font_size", 15 if i == 0 else 13)
+		row.add_theme_font_size_override("font_size", 14 if i == 0 else 12)
 		row.add_theme_color_override("font_color", Color("#c9971f") if i == 0 else Color("#6f6757"))
 		row.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		leaderboard_rows.add_child(row)
@@ -876,15 +892,15 @@ func _refresh_leaderboard_rows() -> void:   # rebuild the submenu's rows — bes
 func _small_button(text: String) -> Button:
 	var b := Button.new()
 	b.text = text
-	b.custom_minimum_size = Vector2(170, 44)
-	b.add_theme_font_size_override("font_size", 18)
+	b.custom_minimum_size = Vector2(200, 52)
+	b.add_theme_font_size_override("font_size", 20)
 	return b
 
 func _big_button(text: String) -> Button:
 	var b := Button.new()
 	b.text = text
-	b.custom_minimum_size = Vector2(340, 50)
-	b.add_theme_font_size_override("font_size", 22)
+	b.custom_minimum_size = Vector2(400, 60)
+	b.add_theme_font_size_override("font_size", 24)
 	_style_button(b)
 	return b
 
@@ -936,10 +952,10 @@ func _center_menu_cards() -> void:   # anchor-centering only follows the root co
 	if menu_panel == null or main_menu_panel == null: return
 	_center_content()
 	var wc := _world_rect().get_center()
-	_place_card(menu_panel, wc, Vector2(480.0, 560.0) if menu_return == "game" else Vector2(480.0, 470.0))   # the paused sheet carries run info + hints + the quit row — taller than plain Settings
-	_place_card(main_menu_panel, wc, Vector2(400.0, 500.0))
+	_place_card(menu_panel, wc, Vector2(480.0, 520.0) if menu_return == "game" else Vector2(440.0, 520.0))   # the paused sheet carries run info + hints + the quit row — taller than plain Settings
+	_place_card(main_menu_panel, wc, Vector2(440.0, 520.0))
 	if leaderboard_panel != null:
-		_place_card(leaderboard_panel, wc, Vector2(460.0, 430.0))
+		_place_card(leaderboard_panel, wc, Vector2(480.0, 450.0))
 
 func _center_content() -> void:   # 4.7.2 removed Window.content_scale_offset entirely (verified in scene/main/viewport.cpp: the stretch transform carries scale only, origin 0) — the public Viewport canvas transform stands in, translating the design space so it sits centered in the expanded world
 	var vp := get_viewport()
@@ -986,7 +1002,7 @@ func build_settings_menu() -> void:
 	menu_panel = PanelContainer.new()
 	menu_panel.mouse_filter = Control.MOUSE_FILTER_STOP   # panel eats its own clicks; the handle_mouse_click guard covers the rest
 	menu_panel.add_theme_stylebox_override("panel", _card_style())   # opaque navy card — readable over both the game and the title scene
-	menu_panel.custom_minimum_size = Vector2(460, 460)
+	menu_panel.custom_minimum_size = Vector2(480, 500)
 	add_child(menu_panel)   # centered by _center_menu_cards(), which pins to the true visible-world center, not the anchors
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 10)
@@ -994,17 +1010,17 @@ func build_settings_menu() -> void:
 	sheet_title = Label.new()
 	sheet_title.text = "Settings"
 	sheet_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	sheet_title.add_theme_font_size_override("font_size", 26)
+	sheet_title.add_theme_font_size_override("font_size", 24)
 	sheet_title.add_theme_color_override("font_color", Color("#2b2620", 0.95))
 	box.add_child(sheet_title)
 	sheet_status = Label.new()
 	sheet_status.text = "everything here saves itself"
 	sheet_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	sheet_status.add_theme_font_size_override("font_size", 13)
+	sheet_status.add_theme_font_size_override("font_size", 12)
 	sheet_status.add_theme_color_override("font_color", Color("#6f6757"))
 	box.add_child(sheet_status)
 	sheet_hints = Label.new()
-	sheet_hints.text = "arrows / A · D move — click / Space launches · Z laser — papers rotate every level"
+	sheet_hints.text = "drag left to move · tap right to fire · papers rotate every level" if _is_touch_device() else "arrows / A · D move — click / Space launches · Z laser — papers rotate every level"
 	sheet_hints.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	sheet_hints.add_theme_font_size_override("font_size", 12)
 	sheet_hints.add_theme_color_override("font_color", Color("#5b5347"))
@@ -1022,12 +1038,14 @@ func build_settings_menu() -> void:
 	res_option.select(maxi(0, _res_values.find(str(settings["size"]))))
 	res_row.add_child(res_option)
 	box.add_child(res_row)
+	res_row.visible = not _is_mobile_os()   # a phone has exactly one resolution — its own screen; the OptionButton popup it opens is what wedged Android
 	fs_check = CheckButton.new()
 	fs_check.text = "Fullscreen"
 	fs_check.add_theme_color_override("font_color", Color("#4c463b"))
 	fs_check.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN   # a full-width CheckButton parks its toggle box at the far edge of the card — keep it snug beside the label
 	fs_check.set_pressed_no_signal(bool(settings.fullscreen))
 	box.add_child(fs_check)
+	fs_check.visible = not _is_mobile_os()   # phones run immersive-fullscreen only — nothing to toggle
 	sfx_slider = _menu_slider(float(settings.sfx_vol))
 	box.add_child(_menu_row("SFX volume", sfx_slider))
 	music_slider = _menu_slider(float(settings.music_vol))
@@ -1040,6 +1058,13 @@ func build_settings_menu() -> void:
 	bg_option = OptionButton.new()
 	bg_option.custom_minimum_size = Vector2(220, 0)
 	bg_row.add_child(bg_option)
+	if _is_mobile_os():   # the OptionButton popup is what wedges Android — a phone gets a plain tap-to-cycle button instead
+		bg_option.visible = false
+		bg_cycle = Button.new()
+		bg_cycle.custom_minimum_size = Vector2(220, 0)
+		bg_cycle.add_theme_font_size_override("font_size", 15)
+		bg_cycle.pressed.connect(_cycle_bg)
+		bg_row.add_child(bg_cycle)
 	box.add_child(bg_row)
 	refresh_bg_option()   # item 0 is always "(auto — rotates per level)" — select() here never fires item_selected
 	var note := Label.new()
@@ -1048,12 +1073,14 @@ func build_settings_menu() -> void:
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART   # keep the panel at its intended width
 	note.custom_minimum_size = Vector2(400, 0)   # stays inside the card's content width (460 - 2x24 margin)
 	box.add_child(note)
+	note.visible = not _is_mobile_os()   # both notes are desktop developer instructions — you can't drop files into the APK on a phone
 	var note2 := Label.new()
 	note2.text = "Copy files in, focus the editor once (Godot imports them), re-open this menu"
 	note2.add_theme_color_override("font_color", Color("#5b5347"))
 	note2.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	note2.custom_minimum_size = Vector2(400, 0)
 	box.add_child(note2)
+	note2.visible = not _is_mobile_os()
 	pause_row = HBoxContainer.new()   # the paused face's way out — all three actions fit one compact row
 	pause_row.add_theme_constant_override("separation", 10)
 	pause_row.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -1100,7 +1127,25 @@ func _menu_slider(linear: float) -> HSlider:
 	s.max_value = 100.0
 	s.custom_minimum_size = Vector2(220, 0)
 	s.set_value_no_signal(linear * 100.0)   # boot-time state must not fire signals
+	if _is_mobile_os():
+		s.custom_minimum_size = Vector2(220, 36)   # a row-height slider leaves a fingernail-sized grabber — give the finger something to land on
+		s.gui_input.connect(_on_touch_slider.bind(s))   # Range only begins a drag when the press lands on the grabber, so steer the value off the finger instead
 	return s
+
+func _on_touch_slider(event: InputEvent, sl: HSlider) -> void:   # on a phone a tap or drag anywhere along the groove sets the volume
+	var touch := event as InputEventScreenTouch
+	var drag := event as InputEventScreenDrag
+	var x: float = 0.0
+	if touch != null:
+		if not touch.pressed:
+			return   # releasing shouldn't nudge the value
+		x = touch.position.x
+	elif drag != null:
+		x = drag.position.x
+	else:
+		return
+	var span: float = maxf(sl.size.x, 1.0)
+	sl.value = sl.min_value + clampf(x / span, 0.0, 1.0) * (sl.max_value - sl.min_value)
 
 func _on_res_selected(index: int) -> void:
 	settings["size"] = _res_values[clampi(index, 0, _res_values.size() - 1)]   # the option text is a display label; the saved value is the bare WxH (kept even while fullscreen)
@@ -1136,6 +1181,24 @@ func refresh_bg_option() -> void:   # rebuild the picker from the (re-)scanned n
 		if i >= 0: current = i + 1
 	if current >= bg_option.item_count: current = 0
 	bg_option.select(current)
+	_sync_bg_cycle()
+
+func _cycle_bg() -> void:   # the phone's dropdown: one tap advances the pick, wrapping back to auto
+	if bg_option == null: return
+	var n: int = bg_option.item_count
+	if n <= 0: return
+	var next: int = (int(bg_option.selected) + 1) % n
+	bg_option.select(next)   # select() never fires item_selected, so the pick has to be applied by hand
+	_on_bg_selected(next)
+	_sync_bg_cycle()
+
+func _sync_bg_cycle() -> void:   # keep the mobile cycle button's caption on whatever the current pick is
+	if bg_cycle == null or bg_option == null: return
+	var i: int = int(bg_option.selected)
+	if i < 0:
+		bg_cycle.text = ""
+		return
+	bg_cycle.text = str(bg_option.get_item_text(i)) + "  ▸"
 
 func _on_bg_selected(index: int) -> void:   # the picker is the only way to touch backgrounds now — B is retired, papers rotate by themselves
 	if index <= 0:
@@ -1296,6 +1359,8 @@ func restart() -> void:
 	state.msgTimer = 0.0
 	build_level()
 	flash_message("LEVEL " + str(state.level), 2.0)   # the brief level title card — the permanent HUD plate is retired
+	touch_hint_timer = 4.0   # show mobile touch instructions for 4 seconds
+	touch_hint_visible = true
 
 # ---------------- Update ----------------
 func update(dt: float) -> void:
@@ -1337,6 +1402,12 @@ func update(dt: float) -> void:
 	if state.msgTimer > 0.0:
 		state.msgTimer -= dt
 		if state.msgTimer <= 0.0: state.message = ""
+	# Mobile touch hint timer — fades out the instruction overlay
+	if touch_hint_timer > 0.0:
+		touch_hint_timer -= dt
+		if touch_hint_timer <= 0.0:
+			touch_hint_timer = 0.0
+			touch_hint_visible = false
 	if state.shake > 0.0: state.shake -= dt * 20.0
 
 	# FEVER mode clock — expires with a parting bonus & ring
@@ -1536,6 +1607,13 @@ func _input(event: InputEvent) -> void:
 	elif event is InputEventMouseMotion:
 		# canvas mousemove in game coords — get_global_mouse_position undoes the content-scale/letterbox transform, correct at every window size
 		handle_mouse_motion(get_global_mouse_position().x)
+	
+	# ---------------- Mobile touch handling ----------------
+	elif event is InputEventScreenTouch:
+		_touch_seen = true   # first real finger: reveal the touch HUD even on a desktop touchscreen
+		handle_screen_touch(event)
+	elif event is InputEventScreenDrag:
+		handle_screen_drag(event)
 
 func key_name(ev: InputEventKey) -> String:
 	var c := ev.keycode
@@ -1546,6 +1624,139 @@ func key_name(ev: InputEventKey) -> String:
 		Key.KEY_LEFT: return "arrowleft"
 		Key.KEY_RIGHT: return "arrowright"
 	return ""
+
+func _is_mobile_os() -> bool:   # hard platform test — window resizing, fullscreen toggles and editor-import notes only mean something on a desktop
+	var osn := OS.get_name().to_lower()
+	return osn == "android" or osn == "ios" or osn == "web"
+
+func _is_touch_device() -> bool:   # phones/tablets get the touch HUD and tap-worded prompts; desktop mouse+keyboard machines don't
+	return _is_mobile_os() or _touch_seen
+
+func handle_screen_touch(event: InputEventScreenTouch) -> void:
+	if menu_open or screen == "menu": return
+	if state.paused: return
+	if state.over:
+		restart()
+		return
+	
+	# Transform touch position from screen pixels to canvas coordinates
+	var touch_x: float = event.position.x
+	var touch_y: float = event.position.y
+	var touch_id: int = event.index
+	
+	# If this is a touch release, clear tracking
+	if not event.pressed:
+		if touch_id == touch_id_left:
+			touch_id_left = -1
+			joystick_active = false
+			joystick_stick = Vector2.ZERO
+			keys["arrowleft"] = false
+			keys["arrowright"] = false
+		elif touch_id == touch_id_right:
+			touch_id_right = -1
+		return
+	
+	# Transform to canvas coordinates using the inverse canvas transform
+	var inv := get_viewport().get_canvas_transform().affine_inverse()
+	var canvas_pos: Vector2 = inv * Vector2(touch_x, touch_y)
+	var canvas_x: float = canvas_pos.x
+	var canvas_y: float = canvas_pos.y
+	
+	# Check pause button tap first (top-left corner, under score)
+	if pause_button_rect.has_point(Vector2(canvas_x, canvas_y)):
+		toggle_menu()
+		return
+	
+	# Determine if this is a left-side (joystick) or right-side (action) touch
+	var mid_x: float = W / 2.0
+	var is_left: bool = canvas_x < mid_x
+	var is_right: bool = canvas_x >= mid_x
+	
+	# If already tracking a touch on the same side, don't override
+	if is_left and touch_id_left >= 0: return
+	if is_right and touch_id_right >= 0: return
+	
+	if is_left:
+		# Start left-side joystick tracking
+		touch_id_left = touch_id
+		joystick_active = true
+		joystick_origin = Vector2(canvas_x, canvas_y)  # touch position = joystick origin
+		joystick_stick = Vector2.ZERO
+	elif is_right:
+		# Right side = tap to launch/laser
+		handle_mouse_click()
+
+func handle_screen_drag(event: InputEventScreenDrag) -> void:
+	# Transform drag position from screen pixels to canvas coordinates
+	var inv := get_viewport().get_canvas_transform().affine_inverse()
+	var drag_pos: Vector2 = inv * event.position
+	var drag_x: float = drag_pos.x
+	var drag_y: float = drag_pos.y
+	var drag_id: int = event.index
+	
+	# Track left-side drag for joystick
+	if drag_id == touch_id_left and joystick_active:
+		var delta: Vector2 = Vector2(drag_x, drag_y) - joystick_origin
+		# Clamp to joystick radius for stick displacement
+		if delta.length() > joystick_radius:
+			delta = delta.normalized() * joystick_radius
+		joystick_stick = delta
+		# Map stick displacement to paddle movement
+		# Negative X stick = move left, positive X stick = move right
+		if delta.x < -10.0:
+			keys["arrowleft"] = true
+			keys["arrowright"] = false
+		elif delta.x > 10.0:
+			keys["arrowright"] = true
+			keys["arrowleft"] = false
+		else:
+			keys["arrowleft"] = false
+			keys["arrowright"] = false
+		return
+
+func _draw_touch_ui(font: Font) -> void:
+	# Draw a subtle vertical divider line down the center (left = move, right = shoot)
+	var divider: Color = Color(0.85, 0.83, 0.78, 0.08)
+	draw_line(Vector2(W / 2.0, FIELD_TOP + 10.0), Vector2(W / 2.0, H - 30.0), divider, 1.0)
+	
+	# Left side: virtual joystick
+	if joystick_active:
+		# Joystick base circle
+		rrect_path(joystick_origin.x - joystick_radius, joystick_origin.y - joystick_radius, joystick_radius * 2.0, joystick_radius * 2.0, joystick_radius, Color(0.85, 0.83, 0.78, 0.15))
+		# Joystick stick (follows finger, clamped to radius)
+		var stick_x: float = joystick_origin.x + joystick_stick.x
+		var stick_y: float = joystick_origin.y + joystick_stick.y
+		rrect_path(stick_x - 18.0, stick_y - 18.0, 36.0, 36.0, 18.0, Color(0.85, 0.83, 0.78, 0.30))
+	else:
+		# Show a subtle hint circle at the default joystick position
+		rrect_path(joystick_origin.x - joystick_radius, joystick_origin.y - joystick_radius, joystick_radius * 2.0, joystick_radius * 2.0, joystick_radius, Color(0.85, 0.83, 0.78, 0.06))
+	
+	# Pause button (top-left under score) - more visible, pulsing glow
+	var pause_alpha: float = 0.55 + 0.15 * sin(bg_time * 2.5)
+	# Glow effect
+	rrect_path(pause_button_rect.position.x - 2.0, pause_button_rect.position.y - 2.0, pause_button_rect.size.x + 4.0, pause_button_rect.size.y + 4.0, 12.0, Color(0.30, 0.38, 0.50, 0.12))
+	# Main button
+	rrect_path(pause_button_rect.position.x, pause_button_rect.position.y, pause_button_rect.size.x, pause_button_rect.size.y, 10.0, Color(0.25, 0.35, 0.48, pause_alpha))
+	# Pause icon (II bars)
+	var bar_width: float = 4.0
+	var bar_height: float = pause_button_rect.size.y - 8.0
+	var bar_x1: float = pause_button_rect.position.x + (pause_button_rect.size.x * 0.25)
+	var bar_x2: float = pause_button_rect.position.x + (pause_button_rect.size.x * 0.65)
+	var bar_y: float = pause_button_rect.position.y + (pause_button_rect.size.y - bar_height) / 2.0
+	draw_rect(Rect2(bar_x1, bar_y, bar_width, bar_height), Color(0.90, 0.88, 0.82, pause_alpha))
+	draw_rect(Rect2(bar_x2, bar_y, bar_width, bar_height), Color(0.90, 0.88, 0.82, pause_alpha))
+	
+	# Touch hint overlay (shows briefly when game starts, then fades)
+	if touch_hint_timer > 0.0 and touch_hint_visible:
+		var hint_alpha: float = clampf(touch_hint_timer / 4.0, 0.0, 1.0) * 0.45
+		# Left hint: "Move" text
+		draw_string(font, Vector2(W / 4.0, H - 60.0), "MOVE", HORIZONTAL_ALIGNMENT_CENTER, 120.0, 14, Color(0.40, 0.38, 0.33, hint_alpha))
+		# Right hint: "Shoot" text
+		draw_string(font, Vector2(W * 3.0 / 4.0, H - 60.0), "SHOOT", HORIZONTAL_ALIGNMENT_CENTER, 120.0, 14, Color(0.40, 0.38, 0.33, hint_alpha))
+	
+	# Bottom instruction hint (persistent faint text)
+	var bottom_hint_alpha: float = 0.08 + 0.03 * sin(bg_time * 1.5)
+	draw_string(font, Vector2(W / 2.0, H - 16.0), "Tap left to move · Tap right to shoot · Pause button top-left", HORIZONTAL_ALIGNMENT_CENTER, float(W) - 30.0, 11, Color(0.40, 0.38, 0.33, bottom_hint_alpha))
 
 func _draw_menu_scene() -> void:   # the title screen: the game's own sky + deterministic stars + a decorative brick wall + idle paddle & ball, all scaled with the window
 	const MENU_PALETTE := ["#c8402e", "#c96f2a", "#c9a227", "#4c8a54", "#2a5f8f", "#7b5e8c"]
@@ -1733,20 +1944,20 @@ func _draw() -> void:
 	draw_string(font, Vector2(16, 48), "HI " + str(state.high), HORIZONTAL_ALIGNMENT_LEFT, -1.0, 12, COLOR_SLOTS["dim_white"])
 	draw_string(font, Vector2(200.0, 26), "LIVES " + "●".repeat(maxi(state.lives, 0)), HORIZONTAL_ALIGNMENT_RIGHT, 744.0, 16, lives_txt_col)
 	if state.combo >= 3:   # combo pill — takes the retired level plate's slot up top, pulsing while the chain is hot
-		var cpsz: int = 14 + int(2.5 * (0.5 + 0.5 * sin(bg_time * 8.0)))
-		rrect_path(W / 2.0 - 80.0, 6.0, 160.0, 26.0, 13.0, Color(0.97, 0.94, 0.88, 0.88))
-		draw_string(font, Vector2(W / 2.0 - 76.0, 24.0), "COMBO ×" + str(state.combo), HORIZONTAL_ALIGNMENT_CENTER, 152.0, cpsz, Color("#8f5f1f"))
+		var cpsz: int = 12 + int(2.0 * (0.5 + 0.5 * sin(bg_time * 8.0)))
+		rrect_path(W / 2.0 - 80.0, 4.0, 160.0, 22.0, 11.0, Color(0.97, 0.94, 0.88, 0.88))
+		draw_string(font, Vector2(W / 2.0 - 76.0, 20.0), "COMBO ×" + str(state.combo), HORIZONTAL_ALIGNMENT_CENTER, 152.0, cpsz, Color("#8f5f1f"))
 	if float(state.fever) > 0.0:   # FEVER pill — a countdown ember under the score plate, pulsing its border
 		var fpulse: float = 0.5 + 0.5 * sin(bg_time * 9.0)
-		rrect_path(16.0, 60.0, 158.0, 26.0, 13.0, Color(0.35, 0.12, 0.0, 0.45))
-		rrect_path(17.0, 61.0, 156.0, 24.0, 12.0, Color(1.0, 0.62, 0.15, 0.30 + 0.40 * fpulse), 1.5)
-		draw_string(font, Vector2(20.0, 78.0), "FEVER ×2  " + str(int(ceil(state.fever))) + "s", HORIZONTAL_ALIGNMENT_CENTER, 150.0, 14, Color("#8a5a1d"))
+		rrect_path(16.0, 54.0, 158.0, 22.0, 11.0, Color(0.35, 0.12, 0.0, 0.45))
+		rrect_path(17.0, 55.0, 156.0, 20.0, 10.0, Color(1.0, 0.62, 0.15, 0.30 + 0.40 * fpulse), 1.5)
+		draw_string(font, Vector2(20.0, 70.0), "FEVER ×2  " + str(int(ceil(state.fever))) + "s", HORIZONTAL_ALIGNMENT_CENTER, 150.0, 12, Color("#8a5a1d"))
 	var ty: float = H - 14.0
 	for k in state.active.keys():
 		var p = POWERUPS[k]
 		var c: Color = COLOR_SLOTS["hud_green"] if p.good else COLOR_SLOTS["hud_red"]
-		draw_string(font, Vector2(16, ty), p.name + "  " + str(int(ceil(state.active[k]))) + "s", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 13, c)
-		ty -= 18.0
+		draw_string(font, Vector2(16, ty), p.name + "  " + str(int(ceil(state.active[k]))) + "s", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 12, c)
+		ty -= 14.0
 
 	if state.flash > 0.0:
 		draw_rect(wr, Color(0.20, 0.18, 0.15, 0.055 * float(state.flash)))   # pickup flash — the whole screen blinks
@@ -1758,6 +1969,10 @@ func _draw() -> void:
 			banner(font, state.message)
 	# the background's file name used to be printed top-right; players never asked for it, so it's gone — and papers rotate on their own now
 
+	# ---------------- Mobile touch UI overlay ----------------
+	if screen == "game" and not state.paused and _is_touch_device():
+		_draw_touch_ui(font)
+	
 	draw_set_transform(Vector2(0, 0), 0.0, Vector2(1, 1))
 
 func _draw_vignette(wr: Rect2) -> void:   # soft darkened frame that pulls the eye into the design field — half strength: on wide windows the sides used to go muddy, and players noticed
@@ -1827,7 +2042,7 @@ func _ready() -> void:
 	apply_bg_setting()   # resolve auto-vs-pinned paper before the first level builds
 	print("board: " + str(leaderboard.size()) + " run(s)  ·  high " + str(state.high) + "  ·  data " + OS.get_user_data_dir())   # boot line: proves where saves live and what was found there
 	build_level()
-	flash_message("Click / space to launch", 3.5)
+	flash_message("Tap to launch" if _is_touch_device() else "Click / space to launch", 3.5)
 	mouse_filter = MOUSE_FILTER_STOP   # keyboard reaches _input when this control is focused
 	focus_mode = FOCUS_ALL
 	if screen != "menu": grab_focus()   # at boot the main menu owns focus — Play is the focused button
