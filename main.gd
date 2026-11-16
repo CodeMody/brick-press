@@ -28,6 +28,13 @@ const FEVER_TIME := 8.0    # seconds — every kill during FEVER re-lights the c
 const FEVER_BONUS := 100   # the parting gift when the heat finally goes cold
 const CHAIN_FUSE := 0.13   # seconds before a lit domino bomb pops — the chain visibly rolls
 const PU_PIXEL := 2.0      # screen px per icon pixel — the 13x9 POWERUPS sprites draw at up to 26x18 px
+const NEAR_MISS_BONUS := 25       # a last-gasp save (shield floor, paddle edge, wall graze) pays for the nerve
+const COMBO_SPEED_STEP := 3.5     # extra ball speed per combo tier on the next paddle bounce — streaks are a gamble
+const PRESS_INTERVAL := 25.0      # seconds between the brick field dropping a row — the press is always coming
+const PRESS_WARN := 5.0           # warn this long before a descent
+const RUSH_TIME := 8.0            # every third level: a gold rush with regenerating blocks and ×3 scoring
+const RUSH_WAVES := 5
+const RUSH_MULT := 3.0
 
 # mulberry32 exact emulation (32-bit semantics on GDScript's 64-bit ints)
 class RNG32:
@@ -53,22 +60,53 @@ const BLOCK_TYPES := {
 	"explode": { "hp": 1, "score": 30, "palette": ["#d8c24a"], "label": "*", "stroke": Color("#a05210", 1.0), "stroke_alpha": 1.0, "indestructible": false },
 	"steel": { "hp": 0, "score": 5, "palette": ["#67757a"], "label": "", "stroke": Color(0,0,0,0), "stroke_alpha": 0.0, "indestructible": true },
 	"gold": { "hp": 1, "score": 50, "palette": ["#c9971f"], "label": "★", "stroke": Color("#a05210", 1.0), "stroke_alpha": 0.9, "indestructible": false },
+	"boss": { "hp": 8, "score": 500, "palette": ["#6b2f2a"], "label": "◆", "stroke": Color("#d8c24a", 1.0), "stroke_alpha": 1.0, "indestructible": false },
 }
+
+const BOSS_ICON := [   # 13x9 skull — bone-white on the dark boss brick, with dark eye sockets and teeth
+	"...KKKKKKK...",
+	"..KWWWWWWWK..",
+	".KWWWWWWWWWK.",
+	".KWKKWWWKKWK.",
+	".KWKKWWWKKWK.",
+	".KWWWWWWWWWK.",
+	"..KWWKWWKWWK.",
+	"..K.WW.WW.W..",
+	".............",
+]
+const TNT_ICON := [   # 9x7 red stick with a band and a lit fuse
+	"...KFK...",
+	"..KKKKK..",
+	".KFFFFFK.",
+	".KFWWWFK.",
+	".KFDDFDK.",
+	".KFFFFFK.",
+	"..KKKKK..",
+]
+const GOLD_ICON := [   # 9x7 glinting star — "this brick drops a power-up"
+	"....F....",
+	"...FFF...",
+	".FFFWFFF.",
+	"..FFFFF..",
+	"...FFF...",
+	"..FF.FF..",
+	".F.....F.",
+]
 
 # Power-up drops render as pixel-art sprites, never letters: "icon" is a 13x9 char grid drawn at PU_PIXEL px.
 # Legend: "." transparent · F fill (p.color) · D dark edge (darkened 0.45) · L light edge (lightened 0.35,
 # light from top-left) · K ink (COLOR_SLOTS white) · W paper-white glint — applied by draw_pixel_icon.
 const POWERUPS := {
-	"MULTI": { "letter": "M", "name": "Multiball", "good": true, "color": Color("#1e7268"), "duration": 0.0, "icon": [".....LL......", "....LFFD.....", "....LFFD.....", ".....DD......", ".............", "..LL......LL.", ".LFFD...LFFD.", ".LFFD...LFFD.", "..DD......DD."] },
-	"EXPAND": { "letter": "W", "name": "Expand paddle", "good": true, "color": Color("#1e7268"), "duration": 15.0, "icon": [".............", ".............", "..K.......K..", ".KK.LLLLL.KK.", "KKK.FFFFF.KKK", ".KK.DDDDD.KK.", "..K.......K..", ".............", "............."] },
-	"SHRINK": { "letter": "S", "name": "Shrink paddle", "good": false, "color": Color("#a83326"), "duration": 10.0, "icon": [".............", ".............", "K...........K", "KK...LLL...KK", "KKK..FFF..KKK", "KK...DDD...KK", "K...........K", ".............", "............."] },
-	"SLOW": { "letter": "T", "name": "Slow ball", "good": true, "color": Color("#1e7268"), "duration": 12.0, "icon": ["....LLLLL....", "...LFFFFFD...", "..LFFFKFFFD..", "..LFFFKFFFD..", "..LFFFKKKFD..", "..LFFFFFFFD..", "..LFFFFFFFD..", "...FFFFFFD...", "....DDDDD...."] },
-	"FAST": { "letter": "F", "name": "Fast ball", "good": false, "color": Color("#a83326"), "duration": 10.0, "icon": [".............", "....KKK......", "....KKK......", "...KKKKKKKKK.", "...KKK..K....", "......KKK....", "......KKK....", ".......KK....", "............."] },
-	"LIFE": { "letter": "+", "name": "Extra life", "good": true, "color": Color("#1e7268"), "duration": 0.0, "icon": ["..LLL...LLL..", ".LWFFF.FFFFD.", ".LFFFFFFFFFD.", ".LFFFFFFFFFD.", "..LFFFFFFFD..", "...FFFFFFD...", "....FFFFD....", ".....FFD.....", "......D......"] },
-	"LASER": { "letter": "Z", "name": "Laser", "good": true, "color": Color("#1e7268"), "duration": 12.0, "icon": [".............", "...KK...KK...", "...KK...KK...", "...KK...KK...", "...KK...KK...", "...KK...KK...", "..LLLLLLLLL..", "..FFFFFFFFD..", "..DDDDDDDDD.."] },
-	"STICKY": { "letter": "C", "name": "Sticky paddle", "good": true, "color": Color("#1e7268"), "duration": 15.0, "icon": ["......L......", ".....LFF.....", "....LFFFD....", "...LFFFFFD...", "..LFFFFFFFD..", "...FFFFFFD...", ".............", "......FF.....", "......FD....."] },
-	"LAVA": { "letter": "L", "name": "Lava ball", "good": true, "color": Color("#b8501e"), "duration": 10.0, "icon": ["......F......", ".....LFF.....", "....LLFFF....", "...LLLFFFF...", "..LLLFFFFFD..", ".DLLFFFDDDDD.", ".DDDDDDDDDDD.", "..DDDDDDDDD..", "............."] },
-	"SHIELD": { "letter": "G", "name": "Shield", "good": true, "color": Color("#2a5f8f"), "duration": 8.0, "icon": [".DDDDDDDDDDD.", ".DLLLLLLLLLD.", ".DLFFFKFFFFD.", ".DLFFFFFFFFD.", ".DLFFFFFFFFD.", "..FFFFFFFFD..", "...FFFFFFD...", "....FFFFD....", ".....FFD....."] },
+	"MULTI": { "letter": "M", "name": "Multiball", "good": true, "color": Color("#1e7268"), "duration": 0.0, "icon": ["...FF...FF...", "..FFWF.FFWF..", "..FFFF.FFFF..", "...FF...FF...", ".............", ".....FFF.....", "....FWWWF....", "....FFFFF....", ".....FFF....."] },
+	"EXPAND": { "letter": "W", "name": "Expand paddle", "good": true, "color": Color("#1e7268"), "duration": 15.0, "icon": [".............", ".............", "K...........K", "KK...FFF...KK", "KKK.FFFFF.KKK", "KK...DDD...KK", "K...........K", ".............", "............."] },
+	"SHRINK": { "letter": "S", "name": "Shrink paddle", "good": false, "color": Color("#a83326"), "duration": 10.0, "icon": [".............", ".............", "KKK.......KKK", ".KK..FFF..KK.", "..K.FFFFF.K..", ".KK..DDD..KK.", "KKK.......KKK", ".............", "............."] },
+	"SLOW": { "letter": "T", "name": "Slow ball", "good": true, "color": Color("#1e7268"), "duration": 12.0, "icon": [".............", "...KKKKKKK...", "...KWWWWWK...", "....KWWWK....", ".....KWK.....", "......K......", ".....KFK.....", "....KFFFK....", "...KKKKKKK..."] },
+	"FAST": { "letter": "F", "name": "Fast ball", "good": false, "color": Color("#a83326"), "duration": 10.0, "icon": [".............", ".....KKK.....", "....KKK......", "...KKKKKKKK..", "..KKKKKKK....", ".....KKK.....", "....KKK......", "....KK.......", "............."] },
+	"LIFE": { "letter": "+", "name": "Extra life", "good": true, "color": Color("#1e7268"), "duration": 0.0, "icon": [".............", "..KK.....KK..", ".KWFK...KFFK.", "KFFFFK.KFFFFK", "KFFFFFFFFFFFK", ".KFFFFFFFFFK.", "..KFFFFFFFK..", "...KFFFFFK...", "....KFFFK...."] },
+	"LASER": { "letter": "Z", "name": "Laser", "good": true, "color": Color("#1e7268"), "duration": 12.0, "icon": ["...K.....K...", "...K.....K...", "...K.....K...", "...K.....K...", "...K.....K...", "...K.....K...", "..KKKKKKKKK..", "..FFFFFFFFF..", "..DDDDDDDDD.."] },
+	"STICKY": { "letter": "C", "name": "Sticky paddle", "good": true, "color": Color("#1e7268"), "duration": 15.0, "icon": [".............", ".....FFF.....", "....FWWWF....", "....FFFFF....", ".....DDD.....", "......K......", "...KKKKKKK...", "...FFFFFFF...", "...DDDDDDD..."] },
+	"LAVA": { "letter": "L", "name": "Lava ball", "good": true, "color": Color("#b8501e"), "duration": 10.0, "icon": [".............", "......F......", ".....LFF.....", "....LFFFF....", "...LLFFFFF...", "..LLFFFFFD...", "..LFFFFFFFD..", "...FFFFFFFD..", "....DDDDDD..."] },
+	"SHIELD": { "letter": "G", "name": "Shield", "good": true, "color": Color("#2a5f8f"), "duration": 8.0, "icon": ["..KKKKKKKKK..", "..KFFFFFFFK..", "..KFFFFFFFK..", "..KFFWWWFFK..", "..KFFFFFFFK..", "...KFFFFFK...", "...KFFFFFK...", "....KFFFK....", ".....KFK....."] },
 }
 
 const COLOR_SLOTS := {
@@ -102,6 +140,8 @@ var state := {
 	"combo": 0, "comboBest": 0, "flash": 0.0,
 	"shake": 0.0,
 	"fever": 0.0, "booms": [],
+	"pressTimer": PRESS_INTERVAL, "pressWarned": false,
+	"rush": false, "rushTimer": 0.0, "rushWaveTimer": 0.0, "rushWavesLeft": 0,
 }
 var paddle := {"x": W / 2 - PADDLE_BASE_W / 2, "y": H - 40.0, "squash": 0.0}
 var keys := {}
@@ -250,6 +290,9 @@ func mulberry32(seedval: int) -> RNG32:
 	r.setup(seedval)
 	return r
 
+func bw(b) -> float: return float(b.get("w", CELL_W))   # per-block width — only the boss is bigger than a cell
+func bh(b) -> float: return float(b.get("h", CELL_H))
+
 func ball_speed() -> float:
 	var s: float = BALL_BASE_SPEED + float(state.level - 1) * 20.0
 	if state.active.get("SLOW", 0.0) > 0.0: s *= 0.65
@@ -271,16 +314,23 @@ func generate_level(n: int) -> Array:
 	var rng := mulberry32(n * 7919 + 13)
 	var rows: int = int(min(4 + floor(float(n) / 2.0), 9))
 	var hard_chance: float = min(0.10 + n * 0.045, 0.4)
-	var steel_chance: float = min(0.04 + n * 0.015, 0.12) if n >= 3 else 0.0
+	var steel_chance: float = min(0.015 + n * 0.005, 0.05) if n >= 3 else 0.0   # rare, never the old 12 % wall-of-metal
+	var steel_cap: int = mini(3 + int(n / 3.0), 6)                              # hard ceiling per level
 	var explode_chance: float = 0.06 if n >= 2 else 0.0
 	var patterns := ["rows", "checker", "pyramid", "diamond", "columns", "clusters", "zigzag", "arch", "castle", "pillars", "crossfire", "sieve"]
 	var pattern: String = patterns[int(floor(rng.next() * patterns.size()))]
 
 	var cells := []
-	var pick_type = func() -> String:
+	var steel_count := 0
+	var steel_cols := {}   # column -> last row that got steel: no vertical stacks, so no steel walls
+	var pick_type = func(c: int, r: int) -> String:
 		var p: float = rng.next()
 		if p < explode_chance: return "explode"
-		if p < explode_chance + steel_chance: return "steel"
+		var steel_ok: bool = n >= 3 and steel_count < steel_cap and r < rows - 1 and not steel_cols.has(c)
+		if steel_ok and p < explode_chance + steel_chance:
+			steel_count += 1
+			steel_cols[c] = r
+			return "steel"
 		if p < explode_chance + steel_chance + hard_chance: return "tough" if rng.next() < 0.6 else "tough3"
 		return "normal"
 
@@ -305,10 +355,24 @@ func generate_level(n: int) -> Array:
 		for c in range(GRID_COLS):
 			if in_shape.call(c, r):
 				if c >= 0 and c < GRID_COLS and r >= 0 and r < rows:
-					var tn: String = pick_type.call()
+					var tn: String = pick_type.call(c, r)
 					if n >= 2 and tn == "normal" and (c + 2 * r) % 11 == 3:
 						tn = "gold"   # fixed gold veins — purely positional, never touches the seeded rng, so the layout anchors stay stable
 					cells.append({"c": c, "r": r, "t": tn})
+	if n % 4 == 0 and cells.size() > 0:   # every fourth level gets a mini-boss at the most central cell
+		var mid: float = (GRID_COLS - 1) / 2.0
+		var boss_cell = null
+		var best_d: float = 1e9
+		for x in cells:
+			var d: float = absf(float(x.c) - mid) + absf(float(x.r) - 1.0) * 0.35
+			if d < best_d:
+				best_d = d
+				boss_cell = x
+		if boss_cell != null:
+			boss_cell.t = "boss"
+			for x in cells.duplicate():   # the boss is two rows tall — free the cell underneath it
+				if x != boss_cell and int(x.c) == int(boss_cell.c) and int(x.r) == int(boss_cell.r) + 1:
+					cells.erase(x)
 	var has_clearable := false
 	for x in cells:
 		if x.t != "steel": has_clearable = true
@@ -323,10 +387,13 @@ func build_level() -> void:
 		var t = BLOCK_TYPES[cell.t]
 		var pal: Array = t.palette
 		var col: String = pal[(cell.r + cell.c) % pal.size()]
+		var boss: bool = String(cell.t) == "boss"
 		blocks_data.append({
 			"c": cell.c, "r": cell.r, "t": cell.t, "hp": t.hp, "color": col,
 			"x": (W - GRID_COLS * (CELL_W + GAP) + GAP) / 2.0 + cell.c * (CELL_W + GAP),
 			"y": FIELD_TOP + cell.r * (CELL_H + GAP),
+			"w": CELL_W,   # same width, twice the height — unmistakably the big one
+			"h": CELL_H * 2.0 + GAP if boss else CELL_H,
 		})
 	state.drops = []
 	state.lasers = []
@@ -337,7 +404,15 @@ func build_level() -> void:
 	state.trail = []
 	state.popups = []
 	state.fever = 0.0
+	state.pressTimer = PRESS_INTERVAL
+	state.pressWarned = false
+	var rush_level: bool = int(state.level) > 0 and int(state.level) % 3 == 0
+	state.rush = rush_level
+	state.rushTimer = RUSH_TIME if rush_level else 0.0
+	state.rushWaveTimer = RUSH_TIME / float(RUSH_WAVES) if rush_level else 0.0
+	state.rushWavesLeft = RUSH_WAVES if rush_level else 0
 	reset_ball_on_paddle()
+	sync_music_energy()   # a rush level takes the high-energy theme with it
 
 # ---------------- Core actions ----------------
 func launch_ball(ball) -> void:
@@ -365,26 +440,105 @@ func fire_laser() -> void:
 func hit_block(b, from_explosion: bool = false) -> bool:
 	var t = BLOCK_TYPES[b.t]
 	if t.indestructible and not from_explosion:
-		state.score += int(t.score * fever_mult())
+		state.score += int(t.score * score_mult())
 		play_tone(300, 0.05, "square", 0.04)
 		return false
 	b.hp -= 1
-	state.score += int(t.score * fever_mult())
+	state.score += int(t.score * score_mult())
 	if b.hp > 0:
 		play_tone(520, 0.05, "square", 0.05)
+		if String(b.t) == "boss" and int(b.hp) == int(t.hp) / 2:   # phase two: the press cracks and sheds a drop shower
+			state.shake = maxf(float(state.shake), 9.0)
+			state.flash = maxf(float(state.flash), 0.6)
+			boom(b.x + bw(b) / 2.0, b.y + bh(b) / 2.0, 2, Color("#d8c24a"))
+			flash_message("THE BOSS CRACKS!", 1.2, true)
+			for _i in 3: spawn_drop(b.x + bw(b) / 2.0, b.y + bh(b) / 2.0)
+			schedule_tone(0.0, 110.0, 0.18, "sawtooth", 0.07)
+			schedule_tone(0.12, 880.0, 0.14, "square", 0.06)
 		return false
 	destroy_block(b, -1)
 	return true
 
 func lava_break(b) -> void:   # molten ball: any block — even indestructible steel — goes down in one shot
 	var t = BLOCK_TYPES[b.t]
-	state.score += int(t.score * fever_mult())
+	state.score += int(t.score * score_mult())
 	play_tone(196, 0.12, "sawtooth", 0.05)   # low molten rumble under destroy_block's pop
 	destroy_block(b, -1)
 
 # ---------------- Excitement: FEVER mode + TNT domino waves ----------------
 func fever_mult() -> float:
 	return 2.0 if float(state.fever) > 0.0 else 1.0
+
+func score_mult() -> float:   # FEVER and a gold rush stack — a rushing, burning run pays ×6
+	var m: float = fever_mult()
+	if bool(state.get("rush", false)): m *= RUSH_MULT
+	return m
+
+func near_miss(x: float, y: float, label: String = "CLOSE!") -> void:   # a nerve-wracking save pays a small, noisy bonus
+	state.score += int(NEAR_MISS_BONUS * score_mult())
+	popup(x, y, label + " +" + str(NEAR_MISS_BONUS), Color("#a05a1e"))
+	state.flash = maxf(float(state.flash), 0.25)
+	play_tone(740, 0.06, "square", 0.05)
+	schedule_tone(0.06, 988.0, 0.09, "square", 0.04)
+
+func press_descend() -> void:   # the press comes down one row; if it reaches the paddle the run pays a life and the level resets
+	state.pressTimer = PRESS_INTERVAL
+	state.pressWarned = false
+	state.shake = maxf(float(state.shake), 8.0)
+	state.flash = maxf(float(state.flash), 0.45)
+	boom(W / 2.0, FIELD_TOP + 30.0, 2, Color("#8a5a1d"))
+	schedule_tone(0.0, 90.0, 0.20, "sawtooth", 0.07)
+	var crushed := false
+	for blk in blocks_data:
+		blk.r = int(blk.get("r", 0)) + 1
+		blk.y = float(blk.y) + CELL_H + GAP
+		if float(blk.y) + bh(blk) >= paddle.y - 8.0: crushed = true
+	if crushed:
+		flash_message("CRUSHED!", 1.4, true)
+		lose_ball()
+		if not bool(state.over): build_level()
+
+func rush_spawn_wave() -> void:   # gold rush: print a handful of fresh (mostly gold) blocks into empty cells
+	var occupied := {}
+	for b in blocks_data: occupied[str(b.c) + "," + str(b.r)] = true
+	var candidates := []
+	var rows: int = int(min(4 + floor(float(state.level) / 2.0), 9))
+	for r in range(rows):
+		for c in range(GRID_COLS):
+			if not occupied.has(str(c) + "," + str(r)): candidates.append([c, r])
+	var spawned := 0
+	while spawned < 6 and candidates.size() > 0:
+		var idx: int = int(rr() * candidates.size()) % candidates.size()
+		var cell: Array = candidates[idx]
+		candidates.remove_at(idx)
+		var tn: String = "gold" if rr() < 0.5 else "normal"
+		var t = BLOCK_TYPES[tn]
+		blocks_data.append({
+			"c": cell[0], "r": cell[1], "t": tn, "hp": t.hp, "color": t.palette[0],
+			"x": (W - GRID_COLS * (CELL_W + GAP) + GAP) / 2.0 + float(cell[0]) * (CELL_W + GAP),
+			"y": FIELD_TOP + float(cell[1]) * (CELL_H + GAP),
+		})
+		spawned += 1
+	boom(paddle.x + state.paddleW / 2.0, FIELD_TOP + 46.0, 1, Color("#c9971f"))
+	schedule_tone(0.0, 587.0, 0.10, "square", 0.05)
+
+func sync_music_energy() -> void:   # FEVER / gold rush borrow the fastest theme, then hand the shuffle back
+	if String(settings.get("track", "auto")) != "auto" or music_playlist.is_empty(): return
+	var high: bool = float(state.fever) > 0.0 or bool(state.get("rush", false))
+	if high == music_adaptive: return
+	music_adaptive = high
+	if high: play_music_index(_energy_track_idx(), true)
+	else: play_music_index(music_base_idx, true)
+
+func brick_near(x: float, y: float, reach: float = 26.0) -> bool:   # did the ball skim a brick on this wall bounce?
+	for blk in blocks_data:
+		var nx: float = clampf(x, blk.x, blk.x + bw(blk))
+		var ny: float = clampf(y, blk.y, blk.y + bh(blk))
+		var dx: float = x - nx
+		var dy: float = y - ny
+		if dx * dx + dy * dy <= reach * reach:
+			return true
+	return false
 
 func start_fever() -> void:
 	state.fever = FEVER_TIME
@@ -395,6 +549,7 @@ func start_fever() -> void:
 	play_tone(523.0, 0.09, "square", 0.06)
 	schedule_tone(0.11, 659.0, 0.09, "square", 0.06)
 	schedule_tone(0.22, 784.0, 0.18, "square", 0.06)
+	sync_music_energy()   # the fastest theme rides the streak
 
 func boom(x: float, y: float, depth: int, col: Color = Color("#d8c24a")) -> void:   # expanding shockwave ring — pure visual, zero rr
 	state.booms.append({"x": x, "y": y, "t": 0.0, "ttl": 0.44 if depth <= 1 else 0.34, "color": col, "r0": 16.0 + 10.0 * mini(depth, 4)})
@@ -402,13 +557,13 @@ func boom(x: float, y: float, depth: int, col: Color = Color("#d8c24a")) -> void
 		state.booms.pop_front()
 
 func do_explode(b, depth: int) -> void:   # a bomb dies: shockwave + 3×3 kill-wave; survivor bombs get fuses so the chain ROLLS like dominoes
-	var cx: float = b.x + CELL_W / 2.0
-	var cy: float = b.y + CELL_H / 2.0
+	var cx: float = b.x + bw(b) / 2.0
+	var cy: float = b.y + bh(b) / 2.0
 	boom(cx, cy, depth, Color("#c9971f") if depth == 1 else Color("#ffb300"))
 	state.shake = maxf(float(state.shake), 6.0 + float(depth))
 	if depth >= 2:
 		schedule_tone(0.0, 120.0 + 30.0 * float(depth), 0.12, "sawtooth", 0.06)   # the wave whooshes deeper
-	var wave_bonus: int = int(10 * mini(depth, 5) * fever_mult())
+	var wave_bonus: int = int(10 * mini(depth, 5) * score_mult())
 	state.score += wave_bonus
 	if depth == 1:
 		popup(cx, b.y - 10.0, "BOOM! +" + str(wave_bonus), Color("#d8c24a"))
@@ -420,7 +575,7 @@ func do_explode(b, depth: int) -> void:   # a bomb dies: shockwave + 3×3 kill-w
 				o["fuse"] = CHAIN_FUSE          # lit neighbour — pops on the next beat, domino style
 				o["fuse_depth"] = depth + 1
 			else:
-				state.score += int(BLOCK_TYPES[o.t].score * fever_mult())   # chain-kills pay their score too — explosions are generous
+				state.score += int(BLOCK_TYPES[o.t].score * score_mult())   # chain-kills pay their score too — explosions are generous
 				o.hp = 1
 				destroy_block(o, blocks_data.find(o))
 
@@ -432,26 +587,33 @@ func check_clear() -> void:   # level clear once all destructible blocks are gon
 
 func destroy_block(b, fromExplosion: int = -1, _top_level: bool = true) -> void:
 	blocks_data.erase(b)
-	spark(b.x + CELL_W / 2.0, b.y + CELL_H / 2.0, b.color)
+	spark(b.x + bw(b) / 2.0, b.y + bh(b) / 2.0, b.color)
 	if fromExplosion >= 0:
 		play_tone(140, 0.15, "sawtooth", 0.07)
 	else:
 		play_tone(660, 0.06, "square", 0.07)
 	if b.t == "gold":
 		schedule_tone(0.07, 1175.0, 0.1, "square", 0.05)   # coin chime over the pop
+	if String(b.t) == "boss":   # the big finish: twice the rumble, a gold ring and a shout
+		state.shake = maxf(float(state.shake), 11.0)
+		state.flash = maxf(float(state.flash), 0.8)
+		boom(b.x + bw(b) / 2.0, b.y + bh(b) / 2.0, 3, Color("#d8c24a"))
+		flash_message("BOSS DOWN!", 1.4, true)   # level_clear() below folds this into the LEVEL N card instead of erasing it
+		schedule_tone(0.0, 1318.0, 0.16, "square", 0.06)
+		schedule_tone(0.14, 1760.0, 0.22, "square", 0.06)
 	if BLOCK_TYPES[b.t].label == "*" and fromExplosion < 0:   # bomb: shockwave + domino wave around it (do_explode owns the blast now)
 		do_explode(b, 1)
 	if fromExplosion < 0 and (b.t == "gold" or rr() < DROP_CHANCE):   # gold drops no matter what — the roll is short-circuited away
-		spawn_drop(b.x + CELL_W / 2.0, b.y + CELL_H / 2.0)
+		spawn_drop(b.x + bw(b) / 2.0, b.y + bh(b) / 2.0)
 	if fromExplosion < 0:
 		state.combo += 1
 		state.comboBest = int(max(state.comboBest, state.combo))
-		popup(b.x + CELL_W / 2.0, b.y + 2.0, "+" + str(BLOCK_TYPES[b.t].score), Color(b.color))
+		popup(b.x + bw(b) / 2.0, b.y + 2.0, "+" + str(BLOCK_TYPES[b.t].score), Color(b.color))
 		if state.combo % COMBO_STEP == 0:
 			var tier: int = mini(int(state.combo / COMBO_STEP), 5)
 			var bonus: int = COMBO_BONUS * tier
 			state.score += bonus
-			popup(b.x + CELL_W / 2.0, b.y + CELL_H + 12.0, "COMBO ×" + str(state.combo) + "  +" + str(bonus), Color("#8f5f1f"))
+			popup(b.x + bw(b) / 2.0, b.y + bh(b) + 12.0, "COMBO ×" + str(state.combo) + "  +" + str(bonus), Color("#8f5f1f"))
 			schedule_tone(0.0, 660.0 + 80.0 * float(tier), 0.12, "square", 0.05)
 		if float(state.fever) > 0.0:
 			state.fever = FEVER_TIME   # a kill during FEVER re-lights the clock — the streak keeps burning
@@ -469,10 +631,22 @@ func spawn_drop(x: float, y: float) -> void:
 
 func apply_powerup(key: String) -> void:
 	var p = POWERUPS[key]
-	if p.good: play_tone(880, 0.12, "sine", 0.08)
-	else: play_tone(220, 0.12, "square", 0.08)
-	flash_message(p.name + "!", 1.2, true)
-	state.flash = 0.45
+	var overcharged: bool = float(p.duration) > 0.0 and float(state.active.get(key, 0.0)) > 0.0
+	var carry: float = float(state.active.get(key, 0.0)) if overcharged else 0.0
+	if overcharged:   # a second copy of a live powerup extends it and pays a bonus — chasing drops now has a point
+		var obonus := 100
+		state.score += int(obonus * score_mult())
+		popup(paddle.x + state.paddleW / 2.0, paddle.y - 44.0, "OVERCHARGE +" + str(obonus), Color("#c9971f"))
+		flash_message("OVERCHARGE " + p.name + "!", 1.2, true)
+		state.shake = maxf(float(state.shake), 3.0)
+		state.flash = maxf(float(state.flash), 0.55)
+		play_tone(1046.0, 0.10, "square", 0.06)
+		schedule_tone(0.08, 1318.0, 0.14, "square", 0.06)
+	else:
+		if p.good: play_tone(880, 0.12, "sine", 0.08)
+		else: play_tone(220, 0.12, "square", 0.08)
+		flash_message(p.name + "!", 1.2, true)
+		state.flash = 0.45
 	if key == "SHIELD":
 		play_tone(520, 0.25, "sine", 0.05)   # soft energy-hum layer for the floor barrier
 	if key == "MULTI":
@@ -484,14 +658,14 @@ func apply_powerup(key: String) -> void:
 		state.lives = int(min(state.lives + 1, 9))
 	elif key == "EXPAND":
 		state.paddleW = 160.0
-		state.active["EXPAND"] = 15.0
+		state.active["EXPAND"] = 15.0 + carry
 		state.active.erase("SHRINK")
 	elif key == "SHRINK":
 		state.paddleW = 80.0
-		state.active["SHRINK"] = 10.0
+		state.active["SHRINK"] = 10.0 + carry
 		state.active.erase("EXPAND")
 	elif key != "":
-		state.active[key] = p.duration
+		state.active[key] = float(p.duration) + carry
 		if key != "SLOW": state.active.erase("SLOW")
 		if key != "FAST": state.active.erase("FAST")
 	normalize_speeds()
@@ -520,7 +694,8 @@ func level_clear() -> void:
 	state.level += 1
 	state.score += 100
 	if state.level % 3 == 0: state.lives = int(min(state.lives + 1, 9))
-	flash_message("LEVEL " + str(state.level), 2.0)
+	var boss_shout: bool = String(state.message).contains("BOSS DOWN")
+	flash_message(("BOSS DOWN!  ·  " if boss_shout else "") + "LEVEL " + str(state.level), 2.0, true)
 	build_level()
 	# the celebration pass — fanfare top note, white blink, paddle squash, a shockwave ring off the paddle and a big floating payout
 	schedule_tone(0.26, 1760.0, 0.2, "square", 0.05)
@@ -554,20 +729,67 @@ func game_over() -> void:
 
 # ---------------- Leaderboard (locally stored best runs, shown on the main menu card) ----------------
 const BOARD_MAX := 8   # best runs kept on disk — the submenu card lists them all
-var leaderboard := []   # Array[Dictionary]: {"score": int, "level": int, "when": "dd/mm hh:mm"} — persisted in the high-score cfg's [board]
+var leaderboard := []   # Array[Dictionary]: {"score": int, "level": int, "when": "dd/mm hh:mm"}
+# Scores no longer live in a plain-text .cfg: a signed, obfuscated binary blob deters casual
+# text-editor tampering. (A client-side game can never be truly cheat-proof — the key ships
+# with it — but editing this file by hand now fails the integrity check and zeroes the board.)
+const SCORE_FILE := "user://brick_press_scores.bin"
+const SETTINGS_FILE := "user://brick_press_settings.cfg"
+const SCORE_MAGIC := "BPSC"
+const SCORE_VERSION := 1
+const SCORE_KEY := "brick-press|score|2026|7f3a9c2e4d8b6a10|0x5c1e"
+var _score_cache = null   # parsed score payload, or null until first read
+
+func _score_digest(data: PackedByteArray) -> PackedByteArray:
+	var ctx := HashingContext.new()
+	ctx.start(HashingContext.HASH_SHA256)
+	ctx.update(SCORE_KEY.to_utf8_buffer())
+	ctx.update(data)
+	return ctx.finish()
+
+func _score_xor(data: PackedByteArray) -> PackedByteArray:   # symmetric — encode and decode are the same pass
+	var key := SCORE_KEY.to_utf8_buffer()
+	var out := PackedByteArray()
+	out.resize(data.size())
+	for i in data.size():
+		out[i] = (data[i] ^ key[i % key.size()] ^ ((i * 37 + 11) & 0xFF)) & 0xFF
+	return out
+
+func load_score_data() -> Dictionary:
+	if _score_cache != null: return _score_cache
+	var out := {"high": 0, "board": []}
+	_score_cache = out
+	if not FileAccess.file_exists(SCORE_FILE): return out
+	var f := FileAccess.open(SCORE_FILE, FileAccess.READ)
+	if f == null: return out
+	if f.get_buffer(4).get_string_from_ascii() != SCORE_MAGIC: return out
+	var ver: int = f.get_32()
+	var n: int = f.get_32()
+	if ver != SCORE_VERSION or n < 2 or n > 1048576: return out
+	var enc := f.get_buffer(n)
+	var sig := f.get_buffer(32)
+	if sig.size() != 32 or sig != _score_digest(enc):
+		push_warning("brick_press_scores.bin failed its integrity check — high score and board reset")
+		return out
+	var parsed = JSON.parse_string(_score_xor(enc).get_string_from_utf8())
+	if typeof(parsed) != TYPE_DICTIONARY: return out
+	out.high = maxi(0, int(parsed.get("high", 0)))
+	var pb = parsed.get("board", [])
+	if typeof(pb) == TYPE_ARRAY:
+		for e in pb:
+			if typeof(e) != TYPE_DICTIONARY: continue
+			var sc: int = int(e.get("score", 0))
+			if sc <= 0: continue
+			out.board.append({"score": sc, "level": maxi(1, int(e.get("level", 1))), "when": String(e.get("when", ""))})
+		out.board.sort_custom(func(a, b): return int(a.score) > int(b.score))
+		if out.board.size() > BOARD_MAX: out.board.resize(BOARD_MAX)
+	_score_cache = out
+	return out
 
 func load_leaderboard() -> void:
 	leaderboard = []
-	var cf := ConfigFile.new()
-	if cf.load("user://breakout_high.cfg") != OK:
-		return
-	for i in BOARD_MAX:
-		var raw := String(cf.get_value("board", str(i + 1), ""))
-		if raw.is_empty():
-			continue
-		var parts := raw.split("|", false)
-		if parts.size() == 3:
-			leaderboard.append({"score": int(parts[0]), "level": int(parts[1]), "when": parts[2]})
+	for e in load_score_data().board:
+		leaderboard.append({"score": int(e.score), "level": int(e.level), "when": String(e.when)})
 
 func add_leaderboard_entry(sc: int, lvl: int) -> void:
 	if sc <= 0:
@@ -602,28 +824,34 @@ func quit_game() -> void:   # "Quit game" — same last write, then straight bac
 	_on_window_close()
 	get_tree().quit()
 
-# localStorage equivalent: user://breakout_high.cfg — [default] holds the best score, [board] the ranked runs
+# High score + board travel together in one signed binary file — they can never drift apart.
 func load_high() -> int:
-	var cf := ConfigFile.new()
-	if cf.load("user://breakout_high.cfg") == OK:
-		return int(cf.get_value("default", "high", 0))
-	return 0
+	return int(load_score_data().high)
 
 func save_high() -> void:
-	var cf := ConfigFile.new()
-	cf.set_value("default", "high", state.high)
-	for i in leaderboard.size():   # one file rewritten whole — the best score and the leaderboard can never drift apart
-		cf.set_value("board", str(i + 1), "%d|%d|%s" % [leaderboard[i].score, leaderboard[i].level, leaderboard[i].when])
-	cf.save("user://breakout_high.cfg")
+	var board := []
+	for e in leaderboard:
+		board.append({"score": int(e.score), "level": int(e.level), "when": String(e.when)})
+	var payload := {"high": int(state.high), "board": board}
+	var enc := _score_xor(JSON.new().stringify(payload).to_utf8_buffer())
+	var f := FileAccess.open(SCORE_FILE, FileAccess.WRITE)
+	if f == null:
+		push_warning("could not write " + SCORE_FILE)
+		return
+	f.store_buffer(SCORE_MAGIC.to_utf8_buffer())
+	f.store_32(SCORE_VERSION)
+	f.store_32(enc.size())
+	f.store_buffer(enc)
+	f.store_buffer(_score_digest(enc))
+	f.close()
+	_score_cache = payload   # keep the in-memory mirror in sync with disk
 
-func high_score_saved() -> int:
-	var cf := ConfigFile.new()
-	if cf.load("user://breakout_high.cfg") == OK:
-		return int(cf.get_value("default", "high", 0))
-	return 0
+func high_score_saved() -> int:   # test hook — force a fresh disk read so it proves persistence
+	_score_cache = null
+	return int(load_score_data().high)
 
 # ---------------- Settings (persisted via user:// ConfigFile — mirrors the high-score pair's style) ----------------
-var settings := {"sfx_vol": 1.0, "music_vol": 0.5, "fullscreen": false, "size": "1280x720", "bg": "auto"}   # linear 0.0-1.0 for the two volume keys; bg = "auto" (papers rotate per level) or a pinned file name
+var settings := {"sfx_vol": 1.0, "music_vol": 0.5, "fullscreen": false, "size": "1280x720", "bg": "auto", "track": "auto"}   # linear 0.0-1.0 for the two volume keys; bg/track = "auto" or a pinned file name
 var menu_open := false   # settings menu counts as a full freeze (the harness reads this member directly)
 var menu_return := "game"   # "menu" | "game" — where the Back button / Esc lands when the settings overlay closes
 var menu_panel: PanelContainer
@@ -633,6 +861,8 @@ var sfx_slider: HSlider
 var music_slider: HSlider
 var bg_option: OptionButton
 var bg_cycle: Button   # the phone's stand-in for bg_option — Android hangs when an OptionButton opens its popup window
+var music_option: OptionButton   # the music-track picker ("auto — shuffle" plus one row per scanned file)
+var music_cycle: Button          # its tap-to-cycle stand-in on phones
 var back_button: Button
 var screen := "menu"   # "menu" = main menu shown (game frozen behind it) | "game" = playing / paused / game over
 var main_menu_panel: PanelContainer
@@ -657,7 +887,7 @@ var _res_values := ["1280x720", "1920x1080", "2560x1440"]   # the bare WxH the l
 
 func load_settings() -> void:
 	var cf := ConfigFile.new()
-	if cf.load("user://breakout_settings.cfg") == OK:
+	if cf.load("user://brick_press_settings.cfg") == OK:
 		settings.sfx_vol = float(cf.get_value("settings", "sfx_vol", 1.0))
 		settings.music_vol = float(cf.get_value("settings", "music_vol", 0.5))
 		settings.fullscreen = bool(cf.get_value("settings", "fullscreen", false))
@@ -665,6 +895,7 @@ func load_settings() -> void:
 		if not _res_values.has(sz): sz = "1280x720"   # migrate sizes saved by older builds (960x640, 1280x800, ...)
 		settings["size"] = sz   # bracket form: settings.size would collide with Dictionary.size()
 		settings["bg"] = str(cf.get_value("settings", "bg", "auto"))   # saves written before the paper rotation shipped simply default to auto
+		settings["track"] = str(cf.get_value("settings", "track", "auto"))   # older saves simply shuffle
 
 func save_settings() -> void:
 	var cf := ConfigFile.new()
@@ -673,13 +904,15 @@ func save_settings() -> void:
 	cf.set_value("settings", "fullscreen", settings.fullscreen)
 	cf.set_value("settings", "size", settings["size"])
 	cf.set_value("settings", "bg", settings["bg"])
-	cf.save("user://breakout_settings.cfg")
+	cf.set_value("settings", "track", settings["track"])
+	cf.save("user://brick_press_settings.cfg")
 
 func set_setting(key: String, value: Variant) -> void:   # test hook + menu path — apply immediately, persist always
 	var k := key
 	if k == "sfx": k = "sfx_vol"
 	elif k == "music": k = "music_vol"
 	settings[k] = value
+	if k == "track": apply_track_setting()
 	apply_audio_volumes()
 	save_settings()
 
@@ -989,7 +1222,7 @@ func play() -> void:   # the Play button — also how tests enter gameplay (Play
 	if state.over:
 		restart()   # it announces the fresh level itself
 	elif screen != "game":
-		flash_message("LEVEL 1", 2.0)   # level numbers announce themselves briefly, then retire to the pause sheet
+		flash_message("LEVEL 1", 2.0, true)   # plain ink on the paper — no cream banner box around the level card
 	state.paused = false
 	menu_open = false
 	menu_panel.visible = false
@@ -1054,6 +1287,23 @@ func build_settings_menu() -> void:
 	box.add_child(_menu_row("SFX volume", sfx_slider))
 	music_slider = _menu_slider(float(settings.music_vol))
 	box.add_child(_menu_row("Music volume", music_slider))
+	var track_row := HBoxContainer.new()
+	var track_lbl := Label.new()
+	track_lbl.text = "Music track"
+	track_lbl.add_theme_color_override("font_color", Color("#4c463b"))
+	track_row.add_child(track_lbl)
+	music_option = OptionButton.new()
+	music_option.custom_minimum_size = Vector2(220, 0)
+	track_row.add_child(music_option)
+	if _is_mobile_os():   # same Android popup hazard as the Background picker — a plain button cycles instead
+		music_option.visible = false
+		music_cycle = Button.new()
+		music_cycle.custom_minimum_size = Vector2(220, 0)
+		music_cycle.add_theme_font_size_override("font_size", 15)
+		music_cycle.pressed.connect(_cycle_music)
+		track_row.add_child(music_cycle)
+	box.add_child(track_row)
+	refresh_music_option()   # item 0 = auto-shuffle; select() here never fires item_selected
 	var bg_row := HBoxContainer.new()
 	var bg_lbl := Label.new()
 	bg_lbl.text = "Background"
@@ -1107,6 +1357,7 @@ func build_settings_menu() -> void:
 	fs_check.toggled.connect(_on_fs_toggled)
 	sfx_slider.value_changed.connect(_on_sfx_changed)
 	music_slider.value_changed.connect(_on_music_changed)
+	music_option.item_selected.connect(_on_track_selected)
 	bg_option.item_selected.connect(_on_bg_selected)
 	back_button.pressed.connect(toggle_menu)   # the same toggle the Esc key uses — menu_open decides the direction
 	resume_button.pressed.connect(func() -> void:
@@ -1214,12 +1465,69 @@ func _on_bg_selected(index: int) -> void:   # the picker is the only way to touc
 		save_settings()
 		set_background(index - 1)
 
+func _track_label(name: String) -> String:   # ink_runner.wav -> "Ink Runner"
+	var stem: String = name.get_basename()
+	var words: PackedStringArray = stem.split("_")
+	for i in range(words.size()): words[i] = words[i].capitalize()
+	return " ".join(words)
+
+func refresh_music_option() -> void:   # rebuild the picker from the (re-)scanned track list
+	if music_option == null: return
+	music_option.clear()
+	music_option.add_item("(auto — shuffle)")
+	for n in music_names: music_option.add_item(_track_label(str(n)))
+	var current := 0
+	var tr := String(settings.get("track", "auto"))
+	if tr != "auto":
+		var i := music_names.find(tr)
+		if i >= 0: current = i + 1
+	if current >= music_option.item_count: current = 0
+	music_option.select(current)   # select() never fires item_selected
+	_sync_music_cycle()
+
+func _cycle_music() -> void:   # the phone's dropdown: one tap advances the pick, wrapping back to auto
+	if music_option == null: return
+	var n: int = music_option.item_count
+	if n <= 0: return
+	var next: int = (int(music_option.selected) + 1) % n
+	music_option.select(next)
+	_on_track_selected(next)
+	_sync_music_cycle()
+
+func _sync_music_cycle() -> void:
+	if music_cycle == null or music_option == null: return
+	var i: int = int(music_option.selected)
+	if i < 0:
+		music_cycle.text = ""
+		return
+	music_cycle.text = str(music_option.get_item_text(i)) + "  ▸"
+
+func _on_track_selected(index: int) -> void:
+	if index <= 0: settings["track"] = "auto"
+	else: settings["track"] = str(music_names[index - 1])
+	save_settings()
+	music_adaptive = false   # a manual pick wins over FEVER's mood swing
+	apply_track_setting()
+	_sync_music_cycle()
+
 # ---------------- Music (drop files in music/, manifest merges + dedups, shuffle via rr()) ----------------
 var music_manifest := {"music": [], "shuffle": true, "loop": true}
-var music_player: AudioStreamPlayer   # child on the Music bus, created in _ready before init_music runs
-var music_playlist := []   # loaded AudioStream resources, in playback order
+var music_player: AudioStreamPlayer      # the canonical ACTIVE player — always holds the incoming stream
+var music_player_b: AudioStreamPlayer    # outgoing stream during a crossfade
+var music_playlist := []   # loaded AudioStream resources
+var music_names := []      # parallel filenames, so the settings picker can pin a track by name
 var music_order := []   # indices into music_playlist (shuffled at boot with rr() when the manifest says so)
 var music_played := 0
+var music_base_idx := 0    # the shuffled/pinned track to return to after an adaptive detour
+var music_adaptive := false
+var music_active_idx := 0
+var music_current_name := ""   # drives the beat clock
+var music_fade = null          # non-null while a crossfade is running
+const MUSIC_FADE := 1.2
+const MUSIC_BPM := {"paper_corridor.wav": 140.0, "starlight_patrol.wav": 128.0, "circuit_sunset.wav": 152.0,
+                    "iron_press.wav": 132.0, "paper_moon.wav": 96.0, "ink_runner.wav": 164.0}
+var beat_phase := 0.0
+var beat_pulse := 0.0
 
 func _import_dest(path: String) -> String:   # the importer's stored-artifact path from the <file>.import sidecar
 	var f := FileAccess.open(path + ".import", FileAccess.READ)
@@ -1261,7 +1569,7 @@ func init_music() -> void:
 			if not k in ["music", "shuffle", "loop"]:
 				push_warning("music/manifest.json: ignoring unknown key '" + str(k) + "'")
 	load_music_playlist()
-	start_music()
+	apply_track_setting()   # "auto" shuffles; a pinned track starts there — either way the picker and the stream agree
 
 func load_music_playlist() -> void:
 	var names := scan_music_names()
@@ -1269,6 +1577,7 @@ func load_music_playlist() -> void:
 		if typeof(n) == TYPE_STRING and not names.has(n):
 			names.append(n)
 	music_playlist.clear()
+	music_names.clear()
 	for n in names:
 		var p := "res://music/" + str(n)
 		var aud = load(p)
@@ -1279,7 +1588,46 @@ func load_music_playlist() -> void:
 				print("music fallback: ", str(n), " -> ", dest)
 		if aud:
 			music_playlist.append(aud)
+			music_names.append(str(n))
 	print("music: ", music_playlist.size(), " track(s) loaded — ", ", ".join(names))
+
+func _gain_db(g: float) -> float:
+	return linear_to_db(maxf(g, 0.0001))   # linear_to_db(0) is -inf; clamp for a well-behaved fade
+
+func play_music_index(idx: int, crossfade: bool = false) -> void:
+	if music_playlist.is_empty() or music_player == null: return
+	idx = ((idx % music_playlist.size()) + music_playlist.size()) % music_playlist.size()
+	music_active_idx = idx
+	music_current_name = String(music_names[idx]) if idx < music_names.size() else ""
+	var incoming = music_playlist[idx]
+	if crossfade and music_player.playing and music_player_b != null:
+		var pos: float = music_player.get_playback_position()
+		music_player_b.stream = music_player.stream
+		music_player_b.volume_db = 0.0
+		music_player_b.play()
+		music_player_b.seek(pos)   # the outgoing theme keeps its place while it fades
+		music_player.stream = incoming
+		music_player.volume_db = _gain_db(0.0)
+		music_player.play()
+		music_fade = {"t": 0.0}
+	else:
+		music_fade = null
+		if music_player_b != null: music_player_b.stop()
+		music_player.volume_db = 0.0
+		music_player.stream = incoming
+		music_player.play()
+	print("music: now playing ", music_current_name, " (fade=", crossfade, ")")
+
+func _update_music_fade(dt: float) -> void:
+	if music_fade == null: return
+	music_fade["t"] = float(music_fade["t"]) + dt
+	var k: float = clampf(float(music_fade["t"]) / MUSIC_FADE, 0.0, 1.0)
+	var e: float = k * k * (3.0 - 2.0 * k)   # smoothstep — no audible corners
+	music_player.volume_db = _gain_db(e)
+	music_player_b.volume_db = _gain_db(1.0 - e)
+	if k >= 1.0:
+		music_player_b.stop()
+		music_fade = null
 
 func start_music() -> void:
 	if music_playlist.is_empty():
@@ -1292,26 +1640,53 @@ func start_music() -> void:
 			music_order[i] = music_order[j]
 			music_order[j] = tmp
 	music_played = 0
-	music_player.stream = music_playlist[music_order[0]]
-	music_player.play()   # Godot has no autoplay restriction — start at boot when files exist
-	print("music: autoplay started (playing=", music_player.playing, ")")
+	music_base_idx = music_order[0]
+	play_music_index(music_base_idx, false)
+
+func _energy_track_idx() -> int:   # the highest-BPM shipped track — FEVER and gold rush borrow its momentum
+	var best := 0
+	var best_bpm := -1.0
+	for i in range(music_playlist.size()):
+		var nm: String = String(music_names[i]) if i < music_names.size() else ""
+		var bpm: float = float(MUSIC_BPM.get(nm, 120.0))
+		if bpm > best_bpm:
+			best_bpm = bpm
+			best = i
+	return best
+
+func apply_track_setting() -> void:   # resolve settings["track"] ("auto" | filename) onto a live stream
+	var tr := String(settings.get("track", "auto"))
+	if tr == "auto" or music_playlist.is_empty():
+		start_music()
+	else:
+		var i := music_names.find(tr)
+		if i < 0:
+			settings["track"] = "auto"   # a saved track that fell off the disk can't strand the player on silence
+			start_music()
+		else:
+			music_adaptive = false
+			music_base_idx = i
+			play_music_index(i, false)
+	refresh_music_option()
 
 func rescan_music() -> void:   # settings overlay re-open path: pick up files dropped + imported since boot
-	if music_player != null and music_player.playing:
-		return   # never interrupt a live stream
 	load_music_playlist()
-	if not music_playlist.is_empty():
-		start_music()
+	refresh_music_option()
+	if music_player == null or not music_player.playing:
+		apply_track_setting()   # only restart when nothing is playing — never cut a live theme just to rescan
 
 func _on_music_finished() -> void:
-	if music_playlist.is_empty() or music_order.is_empty():
+	if music_fade != null: return   # the fading-out player must never pick the next track
+	if music_playlist.is_empty() or music_order.is_empty(): return
+	if String(settings.get("track", "auto")) != "auto" or music_adaptive:
+		play_music_index(music_active_idx, false)   # pinned or high-energy: loop this one
 		return
 	if not bool(music_manifest.loop) and music_played + 1 >= music_order.size():
 		return   # one pass, then silence
 	music_played += 1
 	var slot := music_played % music_order.size()
-	music_player.stream = music_playlist[music_order[slot]]
-	music_player.play()
+	music_base_idx = music_order[slot]
+	play_music_index(music_base_idx, true)
 
 # ---------------- Particles ----------------
 func spark(x: float, y: float, color_hex: String) -> void:
@@ -1362,13 +1737,18 @@ func restart() -> void:
 	state.message = ""
 	state.msgTimer = 0.0
 	build_level()
-	flash_message("LEVEL " + str(state.level), 2.0)   # the brief level title card — the permanent HUD plate is retired
+	flash_message("LEVEL " + str(state.level), 2.0, true)   # the brief level title card — plain ink, no ugly box
 	touch_hint_timer = 4.0   # show mobile touch instructions for 4 seconds
 	touch_hint_visible = true
 
 # ---------------- Update ----------------
 func update(dt: float) -> void:
 	bg_time += dt   # the visual clock also ticks behind the menu/pause screens, so those scenes stay alive
+	# music beat clock + crossfade ramp — both keep running behind menus (the music never freezes)
+	var bpm: float = float(MUSIC_BPM.get(music_current_name, 120.0))
+	beat_phase = fmod(beat_phase + dt * bpm / 60.0, 1.0)
+	beat_pulse = pow(1.0 - beat_phase, 4.0)   # 1 on the beat, decaying to 0 before the next
+	_update_music_fade(dt)
 	# real-time tone queue ticks even while paused (JS setTimeout equivalence)
 	var due := []
 	for t in pending_tones:
@@ -1414,6 +1794,31 @@ func update(dt: float) -> void:
 			touch_hint_visible = false
 	if state.shake > 0.0: state.shake -= dt * 20.0
 
+	# The Press — the whole field drops a row every 25 s, warned five seconds out
+	state.pressTimer = float(state.pressTimer) - dt
+	if float(state.pressTimer) <= PRESS_WARN and not bool(state.pressWarned):
+		state.pressWarned = true
+		flash_message("THE PRESS IS COMING!", 1.1, true)
+		state.shake = maxf(float(state.shake), 3.0)
+	if float(state.pressTimer) <= 0.0:
+		press_descend()
+
+	# Gold rush — every third level pays ×3 while fresh blocks keep printing
+	if bool(state.rush):
+		state.rushTimer = float(state.rushTimer) - dt
+		state.rushWaveTimer = float(state.rushWaveTimer) - dt
+		if float(state.rushWaveTimer) <= 0.0 and int(state.rushWavesLeft) > 0:
+			state.rushWavesLeft = int(state.rushWavesLeft) - 1
+			state.rushWaveTimer = RUSH_TIME / float(RUSH_WAVES)
+			rush_spawn_wave()
+		if float(state.rushTimer) <= 0.0:
+			state.rush = false
+			var rbonus := 300
+			state.score += int(rbonus * fever_mult())
+			popup(paddle.x + state.paddleW / 2.0, paddle.y - 60.0, "GOLD RUSH +" + str(rbonus), Color("#c9971f"))
+			boom(paddle.x + state.paddleW / 2.0, paddle.y - 30.0, 2, Color("#c9971f"))
+			sync_music_energy()
+
 	# FEVER mode clock — expires with a parting bonus & ring
 	if float(state.fever) > 0.0:
 		state.fever = float(state.fever) - dt
@@ -1424,6 +1829,7 @@ func update(dt: float) -> void:
 			boom(paddle.x + state.paddleW / 2.0, paddle.y - 18.0, 1, Color("#ff9800"))
 			play_tone(392.0, 0.1, "square", 0.05)
 			schedule_tone(0.13, 294.0, 0.2, "square", 0.05)
+			sync_music_energy()   # the fever theme steps aside when the heat dies
 
 	# shockwave rings age out (pure visuals)
 	for bm in state.booms:
@@ -1442,7 +1848,7 @@ func update(dt: float) -> void:
 			if fz <= 0.0: popping.append(blk)
 	for blk in popping:
 		if blocks_data.has(blk):
-			state.score += int(BLOCK_TYPES[blk.t].score * fever_mult())   # the domino pays its base score too
+			state.score += int(BLOCK_TYPES[blk.t].score * score_mult())   # the domino pays its base score too
 			do_explode(blk, int(blk.get("fuse_depth", 1)))
 			destroy_block(blk, blocks_data.find(blk))
 	check_clear()   # a domino wave landing the final blow clears the level too (the old code missed this case)
@@ -1492,13 +1898,13 @@ func update(dt: float) -> void:
 		l.y -= 900.0 * dt
 		l.ttl -= dt
 		for blk in blocks_data.duplicate():   # JS iterated a copy
-			if l.x >= blk.x and l.x <= blk.x + CELL_W and l.y <= blk.y + CELL_H and l.y >= blk.y:
+			if l.x >= blk.x and l.x <= blk.x + bw(blk) and l.y <= blk.y + bh(blk) and l.y >= blk.y:
 				l.dead = true
 				if not BLOCK_TYPES[blk.t].indestructible:
 					hit_block(blk, false)
 				else:
 					# lasers melt steel — metal blocks get very annoying in later stages, so one bolt vaporizes them
-					state.score += int(BLOCK_TYPES[blk.t].score * fever_mult())
+					state.score += int(BLOCK_TYPES[blk.t].score * score_mult())
 					spark(l.x, l.y, blk.color)
 					destroy_block(blk, -1)
 				break
@@ -1524,11 +1930,13 @@ func update(dt: float) -> void:
 			b.vx = absf(b.vx)
 			play_tone(440, 0.04, "square", 0.05)
 			puff(field.position.x + BALL_R, b.y, 0.0)
+			if brick_near(b.x, b.y): near_miss(b.x, b.y, "CLOSE!")
 		if b.x > field.end.x - BALL_R:
 			b.x = field.end.x - BALL_R
 			b.vx = -absf(b.vx)
 			play_tone(440, 0.04, "square", 0.05)
 			puff(field.end.x - BALL_R, b.y, PI)
+			if brick_near(b.x, b.y): near_miss(b.x, b.y, "CLOSE!")
 		if b.y < FIELD_TOP - 30.0 + BALL_R - 30.0:
 			b.y = FIELD_TOP - 30.0 + BALL_R - 30.0
 			b.vy = absf(b.vy)
@@ -1540,6 +1948,7 @@ func update(dt: float) -> void:
 				b.vy = -absf(b.vy)
 				play_tone(150, 0.08, "sine", 0.07)
 				puff(b.x, H + BALL_R, -PI / 2.0)
+				near_miss(b.x, H + BALL_R, "SAVED!")
 			else:
 				b.dead = true
 				continue
@@ -1548,11 +1957,13 @@ func update(dt: float) -> void:
 		if b.vy > 0.0 and b.y + BALL_R >= paddle.y and b.y <= paddle.y + PADDLE_H + 4.0 and b.x >= paddle.x - BALL_R and b.x <= paddle.x + state.paddleW + BALL_R:
 			var hit: float = clampf((b.x - (paddle.x + state.paddleW / 2.0)) / (state.paddleW / 2.0), -1.0, 1.0)
 			var angle: float = (-90.0 + hit * 60.0) * PI / 180.0
-			var s: float = min(sqrt(b.vx * b.vx + b.vy * b.vy) + BALL_SPEED_STEP, BALL_MAX_SPEED)
+			var tier: int = mini(int(maxf(0.0, float(state.combo)) / COMBO_STEP), 5)
+			var s: float = min(sqrt(b.vx * b.vx + b.vy * b.vy) + BALL_SPEED_STEP + COMBO_SPEED_STEP * float(tier), BALL_MAX_SPEED)
 			b.vx = cos(angle) * s
 			b.vy = sin(angle) * s
 			b.y = paddle.y - BALL_R
 			paddle["squash"] = 1.0
+			if absf(hit) > 0.86: near_miss(b.x, paddle.y - 14.0, "CLUTCH!")
 			state.combo = 0   # a combo only survives between paddle touches — landing resets the chain
 			if state.active.get("STICKY", 0.0) > 0.0:
 				b.stuck = true
@@ -1562,8 +1973,8 @@ func update(dt: float) -> void:
 
 		# block collision (circle vs cell rect)
 		for blk in blocks_data.duplicate():
-			var nx: float = clampf(b.x, blk.x, blk.x + CELL_W)
-			var ny: float = clampf(b.y, blk.y, blk.y + CELL_H)
+			var nx: float = clampf(b.x, blk.x, blk.x + bw(blk))
+			var ny: float = clampf(b.y, blk.y, blk.y + bh(blk))
 			var dx: float = b.x - nx
 			var dy: float = b.y - ny
 			if dx * dx + dy * dy <= BALL_R * BALL_R:
@@ -1838,19 +2249,31 @@ func _draw() -> void:
 	for b in blocks_data:
 		var t = BLOCK_TYPES[b.t]
 		var col: Color = Color(b.color, 1.0)
+		var bwv: float = bw(b)
+		var bhv: float = bh(b)
 		col.a = 0.85 if t.indestructible else 0.6 + 0.4 * (float(b.hp) / max(float(t.hp), 1.0))
-		rrect_path(b.x, b.y, CELL_W, CELL_H, 4.0, col)   # flat ink field — the glassy top band is gone: one unified surface across every brick hue
+		rrect_path(b.x, b.y, bwv, bhv, 4.0, col)   # flat ink field — the glassy top band is gone: one unified surface across every brick hue
 		if t.stroke_alpha > 0.0:   # stroke-color alpha mirrors the globalAlpha lift before the canvas stroke
 			var stroke_col: Color = t.stroke
 			stroke_col.a = t.stroke_alpha
-			rrect_path(b.x + 1, b.y + 1, CELL_W - 2, CELL_H - 2, 4.0, stroke_col, 2.0)
-		if t.label != "":
-			draw_string(font, Vector2(b.x + CELL_W / 2.0 - 20.0, b.y + CELL_H / 2.0 + 7.0), t.label, HORIZONTAL_ALIGNMENT_CENTER, 40.0, 18, COLOR_SLOTS["brown_label"])
+			rrect_path(b.x + 1, b.y + 1, bwv - 2, bhv - 2, 4.0, stroke_col, 2.0)
+		if t.label != "" and not (["boss", "explode", "gold"].has(String(b.t))):
+			draw_string(font, Vector2(b.x + bwv / 2.0 - 20.0, b.y + bhv / 2.0 + 7.0), t.label, HORIZONTAL_ALIGNMENT_CENTER, 40.0, 18, COLOR_SLOTS["brown_label"])
 		if t.indestructible:
-			rrect_path(b.x + 3, b.y + 3, CELL_W - 6, 5.0, 2.0, COLOR_SLOTS["dark_white"])
-		if String(b.t) == "gold":   # a travelling coin glint — money should shimmer
-			var gxp: float = b.x + 6.0 + fposmod(bg_time * 26.0 + b.c * 31.0 + b.r * 47.0, CELL_W - 12.0)
-			draw_rect(Rect2(gxp, b.y + CELL_H * 0.58, 3.0, 3.0), Color(1.0, 1.0, 0.85, 0.55 + 0.35 * sin(bg_time * 9.0 + b.c)))
+			rrect_path(b.x + 3, b.y + 3, bwv - 6, 5.0, 2.0, COLOR_SLOTS["dark_white"])
+		if String(b.t) == "explode":   # a red TNT stick, not a text asterisk
+			draw_pixel_icon(b.x + bwv / 2.0, b.y + bhv / 2.0 - 1.0, TNT_ICON, Color("#c8402e"), 2.4)
+		if String(b.t) == "gold":   # a glinting star + a travelling coin glint — this brick drops loot
+			var gxp: float = b.x + 6.0 + fposmod(bg_time * 26.0 + b.c * 31.0 + b.r * 47.0, bwv - 12.0)
+			draw_rect(Rect2(gxp, b.y + bhv * 0.58, 3.0, 3.0), Color(1.0, 1.0, 0.85, 0.55 + 0.35 * sin(bg_time * 9.0 + b.c)))
+			draw_pixel_icon(b.x + bwv / 2.0, b.y + bhv / 2.0 - 1.0, GOLD_ICON, Color(0.98, 0.95, 0.84, 1.0), 2.4)   # cream star on gold — readable loot marker
+		if String(b.t) == "boss":   # two rows tall, a big bone-white skull and a gold HP bar — deal with me now
+			draw_pixel_icon(b.x + bwv / 2.0, b.y + bhv * 0.42, BOSS_ICON, Color("#d8c24a"), 3.0)
+			var frac: float = clampf(float(b.hp) / maxf(float(t.hp), 1.0), 0.0, 1.0)
+			var barw: float = bwv - 10.0
+			rrect_path(b.x + 5.0, b.y + bhv - 9.0, barw, 4.0, 2.0, Color(0.12, 0.10, 0.08, 0.55))
+			if frac > 0.0:
+				rrect_path(b.x + 5.0, b.y + bhv - 9.0, barw * frac, 4.0, 2.0, Color("#d8c24a"))
 
 	# lasers
 	for l in state.lasers:
@@ -1931,6 +2354,10 @@ func _draw() -> void:
 		pcol.a = clampf(float(pp.ttl) / POPUP_LIFE, 0.0, 1.0)
 		draw_string(font, Vector2(float(pp.x) - 80.0, float(pp.y)), String(pp.text), HORIZONTAL_ALIGNMENT_CENTER, 160.0, 15, pcol)
 
+	# a barely-there paper-bright breath on every beat — the field taps along with the theme
+	if beat_pulse > 0.0:
+		draw_rect(wr, Color(0.98, 0.94, 0.82, 0.018 * beat_pulse))
+
 	_draw_vignette(wr)
 
 	if float(state.fever) > 0.0:   # FEVER heat — the whole field glows amber and breathes, and the tint dies away with the last second
@@ -1946,15 +2373,24 @@ func _draw() -> void:
 	draw_string(font, Vector2(16, 28), "SCORE " + str(state.score), HORIZONTAL_ALIGNMENT_LEFT, -1.0, 18, COLOR_SLOTS["white"])
 	draw_string(font, Vector2(16, 48), "HI " + str(state.high), HORIZONTAL_ALIGNMENT_LEFT, -1.0, 12, COLOR_SLOTS["dim_white"])
 	draw_string(font, Vector2(200.0, 26), "LIVES " + "●".repeat(maxi(state.lives, 0)), HORIZONTAL_ALIGNMENT_RIGHT, 744.0, 16, lives_txt_col)
-	if state.combo >= 3:   # combo pill — takes the retired level plate's slot up top, pulsing while the chain is hot
-		var cpsz: int = 12 + int(2.0 * (0.5 + 0.5 * sin(bg_time * 8.0)))
+	if state.combo >= 3:   # combo pill — pulses on the music's beat, not a free-running sine
+		var cpsz: int = 12 + int(3.0 * beat_pulse)
 		rrect_path(W / 2.0 - 80.0, 4.0, 160.0, 22.0, 11.0, Color(0.97, 0.94, 0.88, 0.88))
 		draw_string(font, Vector2(W / 2.0 - 76.0, 20.0), "COMBO ×" + str(state.combo), HORIZONTAL_ALIGNMENT_CENTER, 152.0, cpsz, Color("#8f5f1f"))
-	if float(state.fever) > 0.0:   # FEVER pill — a countdown ember under the score plate, pulsing its border
-		var fpulse: float = 0.5 + 0.5 * sin(bg_time * 9.0)
+	if float(state.fever) > 0.0:   # FEVER pill — its border flares on the beat
+		var fpulse: float = beat_pulse
 		rrect_path(16.0, 54.0, 158.0, 22.0, 11.0, Color(0.35, 0.12, 0.0, 0.45))
 		rrect_path(17.0, 55.0, 156.0, 20.0, 10.0, Color(1.0, 0.62, 0.15, 0.30 + 0.40 * fpulse), 1.5)
 		draw_string(font, Vector2(20.0, 70.0), "FEVER ×2  " + str(int(ceil(state.fever))) + "s", HORIZONTAL_ALIGNMENT_CENTER, 150.0, 12, Color("#8a5a1d"))
+	if bool(state.rush):   # gold rush pill — bottom-right: the top-left belongs to FEVER and the mobile pause button
+		var rpulse: float = 0.5 + 0.5 * sin(bg_time * 10.0)
+		var rby: float = H - 44.0
+		rrect_path(W - 174.0, rby, 158.0, 22.0, 11.0, Color(0.35, 0.26, 0.0, 0.55))
+		rrect_path(W - 173.0, rby + 1.0, 156.0, 20.0, 10.0, Color(0.95, 0.72, 0.10, 0.45 + 0.40 * rpulse), 1.5)
+		draw_string(font, Vector2(W - 170.0, rby + 16.0), "GOLD RUSH ×3  " + str(int(ceil(state.rushTimer))) + "s", HORIZONTAL_ALIGNMENT_CENTER, 150.0, 12, Color(0.97, 0.93, 0.84, 1.0))
+	if float(state.pressTimer) <= PRESS_WARN:   # the press is coming — a red countdown above the field
+		var ppulse: float = 0.5 + 0.5 * sin(bg_time * 12.0)
+		draw_string(font, Vector2(W / 2.0 - 90.0, 40.0), "PRESS IN " + str(maxi(0, int(ceil(state.pressTimer)))) + "s", HORIZONTAL_ALIGNMENT_CENTER, 180.0, 16, Color(0.62, 0.26, 0.22, 0.6 + 0.4 * ppulse))
 	var ty: float = H - 14.0
 	for k in state.active.keys():
 		var p = POWERUPS[k]
@@ -2015,15 +2451,15 @@ func rrect_path(x: float, y: float, w: float, h: float, r: float, col: Color, st
 
 # pixel-art power-up sprite stamped centered on (cx, cy): each char of the 13x9 grid is a PU_PIXEL square
 # "." transparent · F fill · D dark edge · L light edge (light from top-left) · K ink · W paper-white glint
-func draw_pixel_icon(cx: float, cy: float, rows: Array, col: Color) -> void:
+func draw_pixel_icon(cx: float, cy: float, rows: Array, col: Color, scale: float = PU_PIXEL) -> void:
 	var dark: Color = col.darkened(0.45)
 	var light: Color = col.lightened(0.35)
 	var ink: Color = COLOR_SLOTS["white"]
 	var glint := Color(1.0, 1.0, 0.85, 1.0)
-	var y0: float = cy - rows.size() * PU_PIXEL / 2.0
+	var y0: float = cy - rows.size() * scale / 2.0
 	for r in rows.size():
 		var row: String = rows[r]
-		var x0: float = cx - row.length() * PU_PIXEL / 2.0
+		var x0: float = cx - row.length() * scale / 2.0
 		for c in row.length():
 			var px: Color
 			match row[c]:
@@ -2033,7 +2469,7 @@ func draw_pixel_icon(cx: float, cy: float, rows: Array, col: Color) -> void:
 				"K": px = ink
 				"W": px = glint
 				_: continue
-			draw_rect(Rect2(x0 + c * PU_PIXEL, y0 + r * PU_PIXEL, PU_PIXEL, PU_PIXEL), px)
+			draw_rect(Rect2(x0 + c * scale, y0 + r * scale, scale, scale), px)
 
 # ---------------- Boot ----------------
 func _ready() -> void:
@@ -2051,6 +2487,10 @@ func _ready() -> void:
 	music_player.bus = "Music"
 	add_child(music_player)
 	music_player.finished.connect(_on_music_finished)
+	music_player_b = AudioStreamPlayer.new()
+	music_player_b.bus = "Music"
+	add_child(music_player_b)
+	music_player_b.finished.connect(_on_music_finished)
 	load_settings()   # load + apply before the menu build so controls show the saved values
 	apply_settings_at_boot()
 	apply_display_stretch()   # scale the 960x640 design canvas into whatever window size the settings picked — a resolution change now scales the game itself

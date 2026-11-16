@@ -157,8 +157,8 @@ def compose(name, bpm, seed, sections, sec_tpl, sec_idx, arp_cycle,
 
 
 SONGS = [
-    # ---- 1. "Neon Corridor" — the original: E minor, driving 140 BPM (seed 42 reproduces it byte-exact)
-    dict(name="neon_corridor", bpm=140.0, seed=42,
+    # ---- 1. "Paper Corridor" — the original: E minor, driving 140 BPM (seed 42 reproduces it byte-exact)
+    dict(name="paper_corridor", bpm=140.0, seed=42,
          sections=[["Em", "Em", "C", "D", "Em", "Em", "C", "B7"],     # A  — driving minor loop
                    ["Am", "Am", "C", "D", "Em", "Em", "C", "B7"],     # A' — lifts on the Aeolian VI/iv color
                    ["Em", "Em", "C", "D", "Am", "C", "D", "B7"]],     # A″ — build back to the turnaround
@@ -181,7 +181,38 @@ SONGS = [
          sec_tpl=[[1, 2, 1, 2, 3, 2, 1, 4], [2, 1, 3, 1, 2, 3, 2, 4], [1, 3, 2, 3, 1, 2, 3, 4]],
          sec_idx=[[0, 1, 2, 1], [1, 0, 2, 0], [2, 0, 1, 2]],
          arp_cycle=[0, 1, 2, 0], lead_duty=0.18, echo=0.13, lead_amp=0.44),
+    # ---- 4. "Iron Press" — D minor, 132 BPM: fat 35%-duty lead, short echo, a marching anvil groove
+    dict(name="iron_press", bpm=132.0, seed=101, transpose=-2,
+         sections=[["Em", "Em", "D", "D", "Em", "Em", "C", "B7"],
+                   ["Em", "D", "C", "D", "Em", "Em", "D", "B7"],
+                   ["Em", "C", "D", "Em", "Am", "C", "D", "B7"]],
+         sec_tpl=[[1, 2, 3, 2, 1, 3, 2, 4], [2, 1, 3, 2, 1, 2, 3, 4], [1, 3, 2, 3, 1, 2, 3, 4]],
+         sec_idx=[[0, 2, 1, 2], [1, 0, 2, 0], [2, 1, 0, 2]],
+         arp_cycle=[0, 1, 2, 0], lead_duty=0.35, echo=0.10, lead_amp=0.52),
+    # ---- 5. "Paper Moon" — A minor, unhurried 96 BPM: thin 12%-duty lead, long echo, a wistful hymn
+    dict(name="paper_moon", bpm=96.0, seed=202, transpose=5,
+         sections=[["Em", "C", "Em", "Am", "C", "Em", "D", "B7"],
+                   ["Am", "C", "Em", "C", "Am", "Em", "D", "B7"],
+                   ["Em", "C", "D", "C", "Am", "Em", "D", "B7"]],
+         sec_tpl=[[1, 1, 2, 1, 1, 2, 3, 4], [1, 2, 1, 1, 2, 1, 3, 4], [2, 1, 1, 2, 1, 2, 1, 4]],
+         sec_idx=[[1, 2, 0, 1], [0, 1, 2, 0], [2, 0, 1, 2]],
+         arp_cycle=[0, 2, 1, 2], lead_duty=0.12, echo=0.28, lead_amp=0.40),
+    # ---- 6. "Ink Runner" — C# minor, frantic 164 BPM: sprinting arps, dry clipped echo, no room to breathe
+    dict(name="ink_runner", bpm=164.0, seed=303, transpose=-3,
+         sections=[["Em", "D", "C", "D", "Em", "C", "D", "B7"],
+                   ["C", "D", "Em", "D", "Am", "C", "D", "B7"],
+                   ["Em", "D", "C", "Em", "D", "C", "Am", "B7"]],
+         sec_tpl=[[1, 3, 1, 3, 2, 3, 1, 4], [2, 1, 3, 1, 3, 2, 1, 4], [1, 2, 1, 3, 1, 2, 3, 4]],
+         sec_idx=[[0, 1, 2, 1], [1, 2, 0, 2], [2, 0, 1, 0]],
+         arp_cycle=[0, 1, 2, 1], lead_duty=0.20, echo=0.08, lead_amp=0.46),
 ]
 
-for song in SONGS:
-    compose(**song)
+# Pass song names on the CLI to render only those (e.g. to add a track without
+# touching the shipped three). No arguments renders the whole set.
+if __name__ == "__main__":
+    import sys
+    only = set(sys.argv[1:])
+    for song in SONGS:
+        if only and song["name"] not in only:
+            continue
+        compose(**song)

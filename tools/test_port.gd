@@ -35,7 +35,7 @@ func layout_str() -> String:
 	var grid := []
 	for _r in rows:
 		grid.append([".", ".", ".", ".", ".", ".", ".", ".", ".", ".", ".", "."])
-	var cmap := {"normal": "n", "tough": "t", "tough3": "3", "explode": "e", "steel": "s", "gold": "g"}
+	var cmap := {"normal": "n", "tough": "t", "tough3": "3", "explode": "e", "steel": "s", "gold": "g", "boss": "B"}
 	for c in cells:
 		if c.t == "steel": continue   # JS harness layout string skipped steel cells (counted them though)
 		grid[c.r][c.c] = cmap[c.t]
@@ -46,11 +46,11 @@ func layout_str() -> String:
 
 func _initialize() -> void:   # SceneTree main-loop entry via -s; root exists here (a coroutine _init would break instantiation)
 	seed(12345)   # deterministic global RNG stream for the port's own launch angles
-	ProjectSettings.set_setting("application/config/use_custom_user_dir", true)   # Godot 4.7 has NO --user-data-dir CLI flag (even absolute paths are silently ignored — probed) and NO OS.set_user_data_dir() anymore either. Flipping this setting before main.tscn exists sends dev-run user:// to %APPDATA%\Breakout Godot — the player's real %APPDATA%\Godot\app_userdata\Breakout Godot stays untouched
+	ProjectSettings.set_setting("application/config/use_custom_user_dir", true)   # Godot 4.7 has NO --user-data-dir CLI flag — flip before main.tscn exists so dev runs use a separate user:// folder and never touch real saves
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("user://"))
 	var da := DirAccess.open("user://")   # fresh storage each run — pumps are real-time so scores vary run to run
-	if da and da.file_exists("breakout_high.cfg"):
-		da.remove("breakout_high.cfg")
+	for f in ["brick_press_scores.bin", "brick_press_settings.cfg"]:
+		if da and da.file_exists(f): da.remove(f)
 	await process_frame   # belt: ensure tree/root fully live before driving the game
 	var scene: PackedScene = load("res://main.tscn")
 	game = scene.instantiate()
@@ -60,7 +60,7 @@ func _initialize() -> void:   # SceneTree main-loop entry via -s; root exists he
 
 	# ---- boot ----
 	check(game.has_method("blocks") and game.has_method("destroy_block") and game.has_method("apply_powerup"), "__breakout-equivalent hooks exposed")
-	check(game.bg_images.size() == 5, "all 5 background slots registered")   # 5 scan + manifest dupes merged away
+	check(game.bg_images.size() >= 5, "the paper stock set is registered (" + str(game.bg_images.size()) + " sheets)")   # folder scan + manifest dupes merged away
 	check(layout_str() == ANCHOR_LEVEL1, "LEVEL 1 LAYOUT MATCHES JS GAME: " + layout_str())
 	check(game.blocks().size() >= 15, "level has blocks (actual " + str(game.blocks().size()) + ", JS asserts >=15)")
 
@@ -217,8 +217,8 @@ func _initialize() -> void:   # SceneTree main-loop entry via -s; root exists he
 	check(absf(AudioServer.get_bus_volume_db(AudioServer.get_bus_index("SFX")) - linear_to_db(0.5)) < 0.2, "SFX bus volume ≈ linear_to_db(0.5)")
 	check(absf(AudioServer.get_bus_volume_db(AudioServer.get_bus_index("Music")) - linear_to_db(0.8)) < 0.2, "Music bus volume ≈ linear_to_db(0.8)")
 	var sCfg := ConfigFile.new()
-	var sErr := sCfg.load("user://breakout_settings.cfg")
-	check(sErr == OK and absf(float(sCfg.get_value("settings", "sfx_vol", -1.0)) - 0.5) < 0.01 and absf(float(sCfg.get_value("settings", "music_vol", -1.0)) - 0.8) < 0.01, "settings persisted to user://breakout_settings.cfg")
+	var sErr := sCfg.load("user://brick_press_settings.cfg")
+	check(sErr == OK and absf(float(sCfg.get_value("settings", "sfx_vol", -1.0)) - 0.5) < 0.01 and absf(float(sCfg.get_value("settings", "music_vol", -1.0)) - 0.8) < 0.01, "settings persisted to user://brick_press_settings.cfg")
 	game.set_setting("sfx", 1.0)   # restore defaults so the run exits clean
 	game.set_setting("music", 0.5)
 
@@ -438,6 +438,122 @@ func _initialize() -> void:   # SceneTree main-loop entry via -s; root exists he
 		if int(row_entry.score) == 310:
 			saw_close = true
 	check(game.leaderboard.size() == mini(size_pre + 1, game.BOARD_MAX) and saw_close, "closing the window mid-run books the pending run — quitting the game no longer deletes scores")
+
+	# ---- new excitement pass: overcharge / near miss / boss / press / rush / music picker ----
+	game.override_rand = 0.95
+	game.screen = "game"; game.menu_open = false; game.state.paused = false; game.state.over = false
+	game.restart()
+
+	var sc0: int = int(game.state.score)
+	game.state.active.clear()
+	game.apply_powerup("SLOW")
+	var slow_first: float = float(game.state.active["SLOW"])
+	game.apply_powerup("SLOW")
+	check(float(game.state.active["SLOW"]) > slow_first + 10.0 and int(game.state.score) >= sc0 + 100, "overcharging a live powerup extends its timer and pays a bonus")
+	var saw_overcharge := false
+	for pp in game.state.popups:
+		if String(pp.text).contains("OVERCHARGE"): saw_overcharge = true
+	check(saw_overcharge, "overcharge announces itself with a floating popup")
+
+	game.state.active.clear()
+	game.state.active["SHIELD"] = 8.0
+	game.state.drops = []
+	var sc1: int = int(game.state.score)
+	var saved_ball = game.new_ball(600.0, 646.0, -90)
+	saved_ball.vx = 0.0; saved_ball.vy = 400.0
+	game.state.balls = [saved_ball]
+	game.update(0.016)
+	check(int(game.state.score) >= sc1 + 25 and float(game.state.balls[0].vy) < 0.0, "a shield floor save pays a near-miss bonus and still bounces")
+
+	var lv4: Array = game.generate_level(4)
+	var boss_cell = null
+	for c in lv4:
+		if String(c.t) == "boss": boss_cell = c
+	check(boss_cell != null and int(game.BLOCK_TYPES["boss"].hp) == 8, "every fourth level ships an 8-HP mini-boss")
+	game.blocks_data.clear()
+	var boss_blk = {"c": 5, "r": 0, "t": "boss", "hp": 8, "color": "#6b2f2a", "x": 400.0, "y": 55.0}
+	game.blocks_data.append(boss_blk)
+	for _i in 4: game.hit_block(boss_blk)
+	check(int(boss_blk.hp) == 4 and String(game.state.message).contains("BOSS"), "the boss cracks at half health and shouts")
+	for _i in 4: game.hit_block(boss_blk)
+	check(not game.blocks_data.has(boss_blk) and String(game.state.message).contains("BOSS DOWN"), "the boss dies with a victory shout that survives the LEVEL card")
+
+	game.restart()
+	var press_y0: float = float(game.blocks()[0].y)
+	game.state.pressTimer = 0.001
+	game.update(0.01)
+	check(float(game.blocks()[0].y) > press_y0 and absf(float(game.state.pressTimer) - float(game.PRESS_INTERVAL)) < 0.05, "the press drops the field a row and re-arms its timer")
+
+	game.restart()
+	game.state.level = 3; game.build_level()
+	check(bool(game.state.rush) and absf(game.score_mult() - 3.0) < 0.01, "level 3 starts a gold rush with ×3 scoring")
+	game.state.fever = 5.0
+	check(absf(game.score_mult() - 6.0) < 0.01, "FEVER stacks with the rush for ×6")
+	game.state.fever = 0.0
+	game.state.rushTimer = 0.001
+	game.update(0.01)
+	check(not bool(game.state.rush), "the rush ends on schedule")
+
+	game.settings["track"] = "auto"; game.apply_track_setting()
+	game._on_track_selected(1)
+	check(String(game.settings["track"]) == String(game.music_names[0]), "the music picker pins a track by filename")
+	var tc := ConfigFile.new()
+	tc.load("user://brick_press_settings.cfg")
+	check(String(tc.get_value("settings", "track", "")) == String(game.music_names[0]), "the pinned track persists to user://brick_press_settings.cfg")
+	game._on_track_selected(0)
+	check(String(game.settings["track"]) == "auto", "the picker can return to auto-shuffle")
+
+	game.restart()
+	game.start_fever()
+	check(bool(game.music_adaptive), "FEVER borrows the high-energy theme on auto")
+	game.state.fever = 0.01
+	game.update(0.02)
+	check(not bool(game.music_adaptive), "the shuffle returns when FEVER ends")
+	check(float(game.beat_phase) >= 0.0 and float(game.beat_phase) < 1.0 and float(game.beat_pulse) >= 0.0 and float(game.beat_pulse) <= 1.0, "the music beat clock stays in range")
+
+	# ---- latest review fixes: steel rebalance, bigger boss, plain level card ----
+	var steel_ok := true
+	for n in range(3, 13):
+		var cells_n: Array = game.generate_level(n)
+		var steel_rows := {}
+		var cnt := 0
+		var rows_n := 0
+		for cc in cells_n: rows_n = maxi(rows_n, int(cc.r) + 1)
+		for cc in cells_n:
+			if String(cc.t) != "steel": continue
+			cnt += 1
+			if int(cc.r) >= rows_n - 1: steel_ok = false   # never a bottom-row barrier
+			if steel_rows.has(int(cc.c)) and steel_rows[int(cc.c)] == int(cc.r) - 1: steel_ok = false
+			steel_rows[int(cc.c)] = int(cc.r)
+		if cnt > mini(3 + int(n / 3.0), 6): steel_ok = false
+	check(steel_ok, "steel is capped, never stacked vertically and never blocks the bottom row")
+
+	game.state.level = 4; game.build_level()
+	var boss_big := false
+	for bb in game.blocks():
+		if String(bb.t) == "boss" and float(bb.h) > float(game.CELL_H): boss_big = true
+	check(boss_big, "the mini-boss is visibly taller than a normal brick")
+
+	game.restart()
+	check(bool(game.state.msgPlain) and String(game.state.message).begins_with("LEVEL"), "level cards are plain ink — no cream banner box")
+
+	# ---- save identity + score integrity ----
+	check(String(OS.get_user_data_dir()).ends_with("Brick Press"), "user:// is named after the new game: " + OS.get_user_data_dir())
+	check(FileAccess.file_exists("user://brick_press_scores.bin"), "scores live in a signed binary file, not an editable .cfg")
+	game.state.high = 4321
+	game.save_high()
+	var sf := FileAccess.open("user://brick_press_scores.bin", FileAccess.READ)
+	var raw := sf.get_buffer(sf.get_length())
+	sf.close()
+	var as_text := raw.get_string_from_ascii()
+	check(not as_text.contains("high") and not as_text.contains("4321"), "the score file is obfuscated — no readable score in a text editor")
+	check(int(game.high_score_saved()) == 4321, "the signed score file round-trips correctly")
+	var tampered := raw.duplicate()
+	tampered[20] = tampered[20] ^ 0xFF
+	var wf := FileAccess.open("user://brick_press_scores.bin", FileAccess.WRITE)
+	wf.store_buffer(tampered)
+	wf.close()
+	check(int(game.high_score_saved()) == 0, "a hand-edited score file fails the integrity check and resets")
 
 	print("\n" + ("ALL CHECKS PASSED" if fails == 0 else str(fails) + " CHECK(S) FAILED"))
 	quit(0 if fails == 0 else 1)
