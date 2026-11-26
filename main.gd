@@ -142,7 +142,10 @@ var state := {
 	"fever": 0.0, "booms": [],
 	"pressTimer": PRESS_INTERVAL, "pressWarned": false,
 	"rush": false, "rushTimer": 0.0, "rushWaveTimer": 0.0, "rushWavesLeft": 0,
+	"presses_survived": 0,
+	"daily_run": false,
 }
+var hitstop := 0.0   # seconds of world-freeze armed by the big moments — boots into the freeze gate first
 var paddle := {"x": W / 2 - PADDLE_BASE_W / 2, "y": H - 40.0, "squash": 0.0}
 var keys := {}
 var mouse_x: Variant = null
@@ -165,6 +168,11 @@ var sticky_ball: Variant = null
 var blocks_data: Array = []
 var bg_names: Array = []
 var override_rand: float = -1.0   # test hook: >= 0 forces this value for all game random decisions
+var seed_base := 13   # JS-parity anchor for level seeds; a daily run points it at the date
+
+func _today_seed() -> int:   # deterministic per calendar day — identical for everyone that day
+	var d := Time.get_datetime_dict_from_system()
+	return int(d.year) * 10000 + int(d.month) * 100 + int(d.day)
 var blockTypes := BLOCK_TYPES   # lowercase alias — harness uses game.blockTypes (JS API parity, camelCase required)
 
 func blocks() -> Array: return blocks_data   # harness API mirrors the JS game's blocks() function
@@ -311,14 +319,15 @@ func reset_ball_on_paddle() -> void:
 
 # ---------------- Level generation ----------------
 func generate_level(n: int) -> Array:
-	var rng := mulberry32(n * 7919 + 13)
+	var rng := mulberry32(n * 7919 + seed_base)
 	var rows: int = int(min(4 + floor(float(n) / 2.0), 9))
 	var hard_chance: float = min(0.10 + n * 0.045, 0.4)
 	var steel_chance: float = min(0.015 + n * 0.005, 0.05) if n >= 3 else 0.0   # rare, never the old 12 % wall-of-metal
 	var steel_cap: int = mini(3 + int(n / 3.0), 6)                              # hard ceiling per level
 	var explode_chance: float = 0.06 if n >= 2 else 0.0
+	var finale: bool = int(n) % 12 == 0
 	var patterns := ["rows", "checker", "pyramid", "diamond", "columns", "clusters", "zigzag", "arch", "castle", "pillars", "crossfire", "sieve"]
-	var pattern: String = patterns[int(floor(rng.next() * patterns.size()))]
+	var pattern: String = patterns[int(floor(rng.next() * patterns.size()))]   # finale keeps the level's seeded field — only the boss changes
 
 	var cells := []
 	var steel_count := 0
@@ -359,7 +368,7 @@ func generate_level(n: int) -> Array:
 					if n >= 2 and tn == "normal" and (c + 2 * r) % 11 == 3:
 						tn = "gold"   # fixed gold veins — purely positional, never touches the seeded rng, so the layout anchors stay stable
 					cells.append({"c": c, "r": r, "t": tn})
-	if n % 4 == 0 and cells.size() > 0:   # every fourth level gets a mini-boss at the most central cell
+	if n % 4 == 0 and not finale and cells.size() > 0:   # every fourth level gets a mini-boss at the most central cell
 		var mid: float = (GRID_COLS - 1) / 2.0
 		var boss_cell = null
 		var best_d: float = 1e9
@@ -373,6 +382,13 @@ func generate_level(n: int) -> Array:
 			for x in cells.duplicate():   # the boss is two rows tall — free the cell underneath it
 				if x != boss_cell and int(x.c) == int(boss_cell.c) and int(x.r) == int(boss_cell.r) + 1:
 					cells.erase(x)
+	if finale:
+		var boss_w: float = CELL_W * 4.0 + GAP * 3.0                                   # cols 4..7 minus nothing — a bare 4-cell span
+		var boss_x: float = (W - GRID_COLS * (CELL_W + GAP) + GAP) / 2.0 + 4.0 * (CELL_W + GAP)
+		for x in cells.duplicate():
+			if int(x.c) >= 4 and int(x.c) <= 7 and int(x.r) <= 1:
+				cells.erase(x)   # free the boss footprint — wide row-0 slab, no stack underneath
+		cells.append({"c": 5, "r": 0, "t": "boss", "w": boss_w, "h": CELL_H * 2.0 + GAP, "hp": 16, "x": boss_x, "finale": true})
 	var has_clearable := false
 	for x in cells:
 		if x.t != "steel": has_clearable = true
@@ -388,12 +404,14 @@ func build_level() -> void:
 		var pal: Array = t.palette
 		var col: String = pal[(cell.r + cell.c) % pal.size()]
 		var boss: bool = String(cell.t) == "boss"
+		var explicit_x: float = float(cell.get("x", -1.0))   # only the finale carries a raw x — a centred 4-cell span
 		blocks_data.append({
-			"c": cell.c, "r": cell.r, "t": cell.t, "hp": t.hp, "color": col,
-			"x": (W - GRID_COLS * (CELL_W + GAP) + GAP) / 2.0 + cell.c * (CELL_W + GAP),
+			"c": cell.c, "r": cell.r, "t": cell.t, "hp": int(cell.get("hp", t.hp)), "color": col,
+			"x": explicit_x if explicit_x >= 0.0 else (W - GRID_COLS * (CELL_W + GAP) + GAP) / 2.0 + cell.c * (CELL_W + GAP),
 			"y": FIELD_TOP + cell.r * (CELL_H + GAP),
-			"w": CELL_W,   # same width, twice the height — unmistakably the big one
-			"h": CELL_H * 2.0 + GAP if boss else CELL_H,
+			"w": float(cell.get("w", CELL_W)),   # the finale carries a 4-cell span — same 2x height, wider
+			"h": float(cell.get("h", CELL_H * 2.0 + GAP if boss else CELL_H)),
+			"finale": bool(cell.get("finale", false)),
 		})
 	state.drops = []
 	state.lasers = []
@@ -406,7 +424,7 @@ func build_level() -> void:
 	state.fever = 0.0
 	state.pressTimer = PRESS_INTERVAL
 	state.pressWarned = false
-	var rush_level: bool = int(state.level) > 0 and int(state.level) % 3 == 0
+	var rush_level: bool = int(state.level) > 0 and int(state.level) % 3 == 0 and int(state.level) % 12 != 0
 	state.rush = rush_level
 	state.rushTimer = RUSH_TIME if rush_level else 0.0
 	state.rushWaveTimer = RUSH_TIME / float(RUSH_WAVES) if rush_level else 0.0
@@ -497,6 +515,9 @@ func press_descend() -> void:   # the press comes down one row; if it reaches th
 		flash_message("CRUSHED!", 1.4, true)
 		lose_ball()
 		if not bool(state.over): build_level()
+	else:
+		state.presses_survived = int(state.get("presses_survived", 0)) + 1
+		if int(state.presses_survived) >= 3: unlock_milestone("press-survivor")
 
 func rush_spawn_wave() -> void:   # gold rush: print a handful of fresh (mostly gold) blocks into empty cells
 	var occupied := {}
@@ -541,7 +562,9 @@ func brick_near(x: float, y: float, reach: float = 26.0) -> bool:   # did the ba
 	return false
 
 func start_fever() -> void:
+	_hitstop(0.09)   # the streak ignites — the field holds still for a beat
 	state.fever = FEVER_TIME
+	unlock_milestone("heat-seeker")
 	flash_message("FEVER!", 1.3)
 	state.shake = maxf(float(state.shake), 5.0)
 	state.flash = maxf(float(state.flash), 0.7)
@@ -594,7 +617,9 @@ func destroy_block(b, fromExplosion: int = -1, _top_level: bool = true) -> void:
 		play_tone(660, 0.06, "square", 0.07)
 	if b.t == "gold":
 		schedule_tone(0.07, 1175.0, 0.1, "square", 0.05)   # coin chime over the pop
-	if String(b.t) == "boss":   # the big finish: twice the rumble, a gold ring and a shout
+	if String(b.t) == "boss":   # the big finish: twice the rumble, a gold ring, a freeze and a shout
+		unlock_milestone("heavyweight")
+		_hitstop(0.12)
 		state.shake = maxf(float(state.shake), 11.0)
 		state.flash = maxf(float(state.flash), 0.8)
 		boom(b.x + bw(b) / 2.0, b.y + bh(b) / 2.0, 3, Color("#d8c24a"))
@@ -602,6 +627,7 @@ func destroy_block(b, fromExplosion: int = -1, _top_level: bool = true) -> void:
 		schedule_tone(0.0, 1318.0, 0.16, "square", 0.06)
 		schedule_tone(0.14, 1760.0, 0.22, "square", 0.06)
 	if BLOCK_TYPES[b.t].label == "*" and fromExplosion < 0:   # bomb: shockwave + domino wave around it (do_explode owns the blast now)
+		_hitstop(0.08)   # the whole chain lands on a beat — one freeze, not one per domino
 		do_explode(b, 1)
 	if fromExplosion < 0 and (b.t == "gold" or rr() < DROP_CHANCE):   # gold drops no matter what — the roll is short-circuited away
 		spawn_drop(b.x + bw(b) / 2.0, b.y + bh(b) / 2.0)
@@ -609,6 +635,8 @@ func destroy_block(b, fromExplosion: int = -1, _top_level: bool = true) -> void:
 		state.combo += 1
 		state.comboBest = int(max(state.comboBest, state.combo))
 		popup(b.x + bw(b) / 2.0, b.y + 2.0, "+" + str(BLOCK_TYPES[b.t].score), Color(b.color))
+		if int(state.combo) >= 20:
+			unlock_milestone("cold-stream")
 		if state.combo % COMBO_STEP == 0:
 			var tier: int = mini(int(state.combo / COMBO_STEP), 5)
 			var bonus: int = COMBO_BONUS * tier
@@ -689,13 +717,18 @@ func popup(x: float, y: float, text: String, col: Color) -> void:   # floating r
 		state.popups.pop_front()
 
 func level_clear() -> void:
+	_hitstop(0.10)   # the moment lands — the world holds still under the fanfare
 	play_tone(988, 0.1, "square", 0.05)
 	schedule_tone(0.12, 1319.0, 0.15, "square", 0.05)
+	var cleared := int(state.level)   # the level being cleared — the finale is replace-rush, not a rush level
+	if cleared % 3 == 0 and cleared % 12 != 0: unlock_milestone("rush-week")
 	state.level += 1
+	if int(state.level) >= 12: unlock_milestone("the-sieve")
 	state.score += 100
 	if state.level % 3 == 0: state.lives = int(min(state.lives + 1, 9))
 	var boss_shout: bool = String(state.message).contains("BOSS DOWN")
-	flash_message(("BOSS DOWN!  ·  " if boss_shout else "") + "LEVEL " + str(state.level), 2.0, true)
+	var finale_level: bool = int(state.level) % 12 == 0
+	flash_message(("THE PRESS HEAD  ·  " if finale_level else "") + ("BOSS DOWN!  ·  " if boss_shout and not finale_level else "") + "LEVEL " + str(state.level), 2.2, true)
 	build_level()
 	# the celebration pass — fanfare top note, white blink, paddle squash, a shockwave ring off the paddle and a big floating payout
 	schedule_tone(0.26, 1760.0, 0.2, "square", 0.05)
@@ -719,6 +752,7 @@ func lose_ball() -> void:
 	reset_ball_on_paddle()
 
 func game_over() -> void:
+	_hitstop(0.16)   # the fall — the whole screen takes one held breath
 	state.over = true
 	state.high = int(max(state.high, state.score))
 	if int(state.score) > 0:
@@ -726,6 +760,20 @@ func game_over() -> void:
 	save_high()
 	_refresh_leaderboard_rows()
 	flash_message("GAME OVER — tap the screen to restart" if _is_touch_device() else "GAME OVER — click or press R", 999.0)
+
+# -------------------- Milestones (persistent, signed with the board) ----------------
+# Ids are stable strings — the payload is a plain dict and old saves simply lack the key (load defaults to {}).
+const MILESTONES := [
+	{"id": "heat-seeker",    "name": "Heat Seeker",  "desc": "Ignite FEVER once"},
+	{"id": "cold-stream",    "name": "Cold Stream",  "desc": "Chain a COMBO x20"},
+	{"id": "heavyweight",    "name": "Heavyweight",  "desc": "Take down a boss"},
+	{"id": "rush-week",      "name": "Rush Week",    "desc": "Clear a GOLD RUSH level"},
+	{"id": "press-survivor", "name": "Press Survived", "desc": "Survive three presses in a run"},
+	{"id": "the-sieve",      "name": "The Sieve",    "desc": "Reach level 12"},
+]
+var achievements := {}   # {id: true} — unlocked milestones, persisted in the signed score payload
+# Ids are stable strings — the payload is a plain dict and old saves simply lack the key (load defaults to {}).
+const MILESTONE_IDS := ["heat-seeker", "cold-stream", "heavyweight", "rush-week", "press-survivor", "the-sieve"]
 
 # ---------------- Leaderboard (locally stored best runs, shown on the main menu card) ----------------
 const BOARD_MAX := 8   # best runs kept on disk — the submenu card lists them all
@@ -757,7 +805,7 @@ func _score_xor(data: PackedByteArray) -> PackedByteArray:   # symmetric — enc
 
 func load_score_data() -> Dictionary:
 	if _score_cache != null: return _score_cache
-	var out := {"high": 0, "board": []}
+	var out := {"high": 0, "board": [], "achievements": {}}
 	_score_cache = out
 	if not FileAccess.file_exists(SCORE_FILE): return out
 	var f := FileAccess.open(SCORE_FILE, FileAccess.READ)
@@ -774,6 +822,11 @@ func load_score_data() -> Dictionary:
 	var parsed = JSON.parse_string(_score_xor(enc).get_string_from_utf8())
 	if typeof(parsed) != TYPE_DICTIONARY: return out
 	out.high = maxi(0, int(parsed.get("high", 0)))
+	var acch = parsed.get("achievements", {})
+	if typeof(acch) == TYPE_DICTIONARY:
+		for k in acch.keys():
+			if typeof(acch[k]) == TYPE_BOOL and acch[k]:
+				out.achievements[String(k)] = true
 	var pb = parsed.get("board", [])
 	if typeof(pb) == TYPE_ARRAY:
 		for e in pb:
@@ -805,6 +858,7 @@ func quit_to_menu() -> void:   # "Quit to menu" from the paused sheet — an aba
 		add_leaderboard_entry(int(state.score), int(state.level))
 	state.high = int(max(state.high, state.score))
 	save_high()
+	_refresh_milestones_label()   # the menu's milestones row reflects everything earned this run
 	restart()
 	screen = "menu"
 	menu_open = false
@@ -832,7 +886,7 @@ func save_high() -> void:
 	var board := []
 	for e in leaderboard:
 		board.append({"score": int(e.score), "level": int(e.level), "when": String(e.when)})
-	var payload := {"high": int(state.high), "board": board}
+	var payload := {"high": int(state.high), "board": board, "achievements": achievements}
 	var enc := _score_xor(JSON.new().stringify(payload).to_utf8_buffer())
 	var f := FileAccess.open(SCORE_FILE, FileAccess.WRITE)
 	if f == null:
@@ -849,6 +903,36 @@ func save_high() -> void:
 func high_score_saved() -> int:   # test hook — force a fresh disk read so it proves persistence
 	_score_cache = null
 	return int(load_score_data().high)
+
+# -------------------- Milestones — unlock sites call this; save_high carries the unlocks
+func _milestone_name(id: String) -> String:
+	for m in MILESTONES:
+		if String(m["id"]) == id: return String(m["name"])
+	return id
+
+func _milestone_count() -> int:
+	var n := 0
+	for k in achievements.keys():
+		if k in MILESTONE_IDS and achievements[k]: n += 1
+	return n
+
+func _refresh_milestones_label() -> void:
+	if milestone_label == null: return
+	var total := MILESTONES.size()
+	var got := _milestone_count()
+	milestone_label.text = "Milestones  " + str(got) + " / " + str(total)
+
+func unlock_milestone(id: String) -> void:   # idempotent — a milestone never fires twice, un-locking never happens
+	if achievements.has(id): return
+	if id not in MILESTONE_IDS: return
+	achievements[id] = true
+	var name := _milestone_name(id)
+	popup(paddle.x + state.paddleW / 2.0, paddle.y - 96.0, "MILESTONE — " + name, Color("#c9971f"))
+	_hitstop(0.05)
+	play_tone(1046.0, 0.10, "square", 0.05)
+	schedule_tone(0.09, 1318.0, 0.15, "square", 0.05)
+	save_high()
+	_refresh_milestones_label()
 
 # ---------------- Settings (persisted via user:// ConfigFile — mirrors the high-score pair's style) ----------------
 var settings := {"sfx_vol": 1.0, "music_vol": 0.5, "fullscreen": false, "size": "1280x720", "bg": "auto", "track": "auto"}   # linear 0.0-1.0 for the two volume keys; bg/track = "auto" or a pinned file name
@@ -875,6 +959,7 @@ var leaderboard_panel: PanelContainer   # a Settings-sibling modal card — best
 var leaderboard_rows: VBoxContainer
 var lb_close_button: Button
 var leaderboard_open := false
+var milestone_label: Label   # the main menu's "Milestones X / 6" row — rebuilt each time the menu builds
 var sheet_title: Label   # the settings sheet doubles as the pause menu — these three labels retitle it per context
 var sheet_status: Label
 var sheet_hints: Label
@@ -998,7 +1083,7 @@ func build_main_menu() -> void:
 	main_menu_panel = PanelContainer.new()
 	main_menu_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	main_menu_panel.add_theme_stylebox_override("panel", _card_style())
-	main_menu_panel.custom_minimum_size = Vector2(440, 520)   # four big buttons + title + footer — no leaderboard rows inside anymore, that's a submenu of its own
+	main_menu_panel.custom_minimum_size = Vector2(440, 600)   # five big buttons + milestones row + title + footer — the leaderboard is its own submenu
 	add_child(main_menu_panel)
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 12)
@@ -1033,6 +1118,26 @@ func build_main_menu() -> void:
 	box.add_child(settings_button)
 	box.add_child(leaderboard_button)
 	box.add_child(quit_button)
+	var daily_spacer := Control.new()
+	daily_spacer.custom_minimum_size = Vector2(0, 8)
+	box.add_child(daily_spacer)
+	var daily_button := _big_button("Daily run")
+	daily_button.custom_minimum_size = Vector2(400, 46)
+	daily_button.add_theme_font_size_override("font_size", 18)
+	_style_button(daily_button)
+	box.add_child(daily_button)
+	var daily_note := Label.new()
+	daily_note.text = "— today's seed — the same run for everyone"
+	daily_note.add_theme_color_override("font_color", Color("#6f6757"))
+	daily_note.add_theme_font_size_override("font_size", 11)
+	daily_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(daily_note)
+	milestone_label = Label.new()
+	milestone_label.add_theme_color_override("font_color", Color("#5b5347"))
+	milestone_label.add_theme_font_size_override("font_size", 12)
+	milestone_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(milestone_label)
+	_refresh_milestones_label()
 	var footer := Label.new()
 	footer.text = "Pause button top-left · The left half moves the paddle" if _is_touch_device() else "Esc opens settings · F toggles fullscreen"
 	footer.add_theme_color_override("font_color", Color("#5b5347"))
@@ -1043,6 +1148,7 @@ func build_main_menu() -> void:
 	settings_button.pressed.connect(_on_menu_settings_pressed)
 	leaderboard_button.pressed.connect(open_leaderboard)
 	quit_button.pressed.connect(quit_game)
+	daily_button.pressed.connect(daily_play)
 	play_button.grab_focus()   # Space/Enter on the focused button works straight away
 	_refresh_dim()   # veil hidden over the title screen (it only dims gameplay behind the settings overlay)
 	_center_menu_cards()
@@ -1190,7 +1296,7 @@ func _center_menu_cards() -> void:   # anchor-centering only follows the root co
 	_center_content()
 	var wc := _world_rect().get_center()
 	_place_card(menu_panel, wc, Vector2(480.0, 520.0) if menu_return == "game" else Vector2(440.0, 520.0))   # the paused sheet carries run info + hints + the quit row — taller than plain Settings
-	_place_card(main_menu_panel, wc, Vector2(440.0, 520.0))
+	_place_card(main_menu_panel, wc, Vector2(440.0, 600.0))
 	if leaderboard_panel != null:
 		_place_card(leaderboard_panel, wc, Vector2(480.0, 450.0))
 
@@ -1218,7 +1324,19 @@ func _refresh_dim() -> void:   # the dark veil belongs to whichever modal card i
 	if main_menu_dim != null:
 		main_menu_dim.visible = menu_open or leaderboard_open
 
+func daily_play() -> void:   # the Daily run button — today's seed, identical layout for everyone; restarts a live run to the daily seed
+	state.daily_run = true
+	seed_base = _today_seed()
+	restart()
+	state.paused = false
+	menu_open = false
+	menu_panel.visible = false
+	screen = "game"
+	main_menu_panel.visible = false
+
 func play() -> void:   # the Play button — also how tests enter gameplay (Play from a finished game = new run)
+	state.daily_run = false   # the default run is not the daily challenge — restore the JS-parity anchor
+	seed_base = 13
 	if state.over:
 		restart()   # it announces the fresh level itself
 	elif screen != "game":
@@ -1733,6 +1851,7 @@ func restart() -> void:
 	state.score = 0
 	state.level = 1
 	state.lives = 3
+	state.presses_survived = 0
 	state.paddleW = PADDLE_BASE_W
 	state.message = ""
 	state.msgTimer = 0.0
@@ -1742,29 +1861,39 @@ func restart() -> void:
 	touch_hint_visible = true
 
 # ---------------- Update ----------------
+func _hitstop(seconds: float) -> void:   # arm the impact frame — the world freezes for a beat; keep the max, never stacks
+	hitstop = maxf(hitstop, seconds)
+
 func update(dt: float) -> void:
-	bg_time += dt   # the visual clock also ticks behind the menu/pause screens, so those scenes stay alive
+	var real_dt := dt   # the real clock — paddle, visuals and music run on it even when the world crawls
+	bg_time += real_dt   # the visual clock also ticks behind the menu/pause screens, so those scenes stay alive
 	# music beat clock + crossfade ramp — both keep running behind menus (the music never freezes)
 	var bpm: float = float(MUSIC_BPM.get(music_current_name, 120.0))
-	beat_phase = fmod(beat_phase + dt * bpm / 60.0, 1.0)
+	beat_phase = fmod(beat_phase + real_dt * bpm / 60.0, 1.0)
 	beat_pulse = pow(1.0 - beat_phase, 4.0)   # 1 on the beat, decaying to 0 before the next
-	_update_music_fade(dt)
+	_update_music_fade(real_dt)
 	# real-time tone queue ticks even while paused (JS setTimeout equivalence)
 	var due := []
 	for t in pending_tones:
-		t.at -= dt
+		t.at -= real_dt
 		if t.at <= 0.0: due.append(t)
 	for t in due:
 		pending_tones.erase(t)
 		play_tone(t.freq, t.dur, t.type, t.vol)
 	if state.paused or menu_open or screen == "menu": return   # full freeze: paddle, balls, timers, drops — all of it (the pause menu and any open modal count as paused)
+	if hitstop > 0.0:   # the impact frame — the world freezes for a beat, music and tones keep ticking
+		hitstop -= real_dt
+		return
+	# last life — the world crawls to 55 % but the paddle keeps full speed: tension without bullying the player
+	if int(state.lives) == 1 and not bool(state.over):
+		dt = real_dt * 0.55
 	# paddle — keyboard only now: the mouse no longer steers it (accidental bumps teleported the paddle;
 	# the mouse still launches / fires / clicks the menu). Speed raised for keyboard-only comfort.
 	var speed := 820.0
 	if keys.get("arrowleft", false) or keys.get("a", false):
-		paddle.x -= speed * dt
+		paddle.x -= speed * real_dt
 	if keys.get("arrowright", false) or keys.get("d", false):
-		paddle.x += speed * dt
+		paddle.x += speed * real_dt
 	# expand-stretch can make the visible world much wider than the 960 design space —
 	# the paddle and the side walls play off the REAL visible edges, so nothing hides in the margins
 	var field := _world_rect()
@@ -2502,6 +2631,7 @@ func _ready() -> void:
 	if bg_count() == 0: load_backgrounds()
 	state.high = load_high()
 	load_leaderboard()
+	achievements = load_score_data().get("achievements", {})
 	save_high()   # boot bank: every launch stamps both save files — user:// is guaranteed writable (4.7 data_paths docs), so "the save vanished" and "the save never ran" are now distinguishable by looking
 	save_settings()
 	apply_bg_setting()   # resolve auto-vs-pinned paper before the first level builds

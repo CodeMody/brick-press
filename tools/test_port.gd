@@ -25,6 +25,7 @@ func jstr(x: Variant) -> String:
 
 func pump(n: int) -> void:
 	for _i in n:
+		game.hitstop = 0.0   # the instant of impact is juice — mechanics assertions assert on the steady world
 		await process_frame
 
 func layout_str() -> String:
@@ -241,16 +242,19 @@ func _initialize() -> void:   # SceneTree main-loop entry via -s; root exists he
 	var steel_a = {"c": 6, "r": 10, "t": "steel", "hp": 0, "color": "#78909c", "x": 480.0 - game.CELL_W / 2.0, "y": 400.0 - game.CELL_H / 2.0}
 	game.blocks_data.append(steel_a)
 	var score_a: int = game.state.score
+	game.hitstop = 0.0   # clear the instant of impact before driving
 	game.update(0.016)
 	check(game.blocks().has(steel_a) and int(game.state.score) == score_a + 5, "plain ball cannot break steel (control: +5 clink, block stands)")
 	game.apply_powerup("LAVA")
 	check(game.state.active.has("LAVA") and float(game.state.active["LAVA"]) > 9.0, "LAVA timer starts (10 s)")
+	game.hitstop = 0.0   # clear the instant of impact before driving
 	game.update(0.016)   # molten ball touches the steel block
 	check(not game.blocks().has(steel_a) and int(game.state.score) == score_a + 10, "lava ball one-shots indestructible steel")
 	game.state.drops = []   # the destroyed steel rolled a drop (override_rand 0.05 < 0.12) — park it out of the next frame's way
 	var steel_b = {"c": 2, "r": 10, "t": "steel", "hp": 0, "color": "#78909c", "x": 148.0, "y": 400.0}
 	game.blocks_data.append(steel_b)
 	game.state.lasers = [{"x": steel_b["x"] + game.CELL_W / 2.0, "y": steel_b["y"] + game.CELL_H * 0.6, "ttl": 1.0}]
+	game.hitstop = 0.0   # clear the instant of impact before driving
 	game.update(0.001)   # bolt advances 0.9 px — the tip stays inside the block and vaporizes it
 	check(not game.blocks().has(steel_b), "laser bolt breaks metal (steel no longer blocks the laser)")
 
@@ -258,6 +262,7 @@ func _initialize() -> void:   # SceneTree main-loop entry via -s; root exists he
 	var steel_c = {"c": 5, "r": 10, "t": "steel", "hp": 0, "color": "#78909c", "x": 444.0, "y": 374.0}
 	game.blocks_data.append(steel_c)
 	game.state.balls[0].x = 480.0; game.state.balls[0].y = 400.0; game.state.balls[0].vx = 0.0; game.state.balls[0].vy = -400.0; game.state.balls[0].stuck = false
+	game.hitstop = 0.0   # clear the instant of impact before driving
 	game.update(0.016)   # ball flies up into the steel — must eat through it and keep flying
 	check(not game.blocks().has(steel_c) and float(game.state.balls[0].vy) < 0.0, "lava ball burns through — keeps flying instead of bouncing")
 
@@ -302,12 +307,14 @@ func _initialize() -> void:   # SceneTree main-loop entry via -s; root exists he
 	game.state.active["SHIELD"] = 8.0
 	game.state.balls[0].x = 600.0; game.state.balls[0].y = 645.0; game.state.balls[0].vx = 0.0; game.state.balls[0].vy = 400.0; game.state.balls[0].stuck = false
 	var lives_s0: int = game.state.lives
+	game.hitstop = 0.0   # clear the instant of impact before driving
 	game.update(0.016)   # the ball walks off the floor line — the guard must bounce it
 	check(game.state.balls[0].vy < 0.0 and game.state.lives == lives_s0, "shield band bounces the falling ball instead of eating a life")
 	check(game.state.trail.size() > 0 and game.state.trail.size() <= game.MAX_TRAIL, "ball trail is alive and bounded")
 	for fb in game.state.balls:
 		fb.stuck = true; fb.vx = 0.0; fb.vy = 0.0
 	for _i in 80:
+		game.hitstop = 0.0   # clear the instant of impact before driving
 		game.update(0.033)   # 2.6 s of quiet driven by direct steps — no awaits, so nothing else moves
 	check(game.state.popups.size() == 0 and game.state.trail.size() == 0, "popups & trail fully decay once play goes quiet")
 
@@ -349,10 +356,12 @@ func _initialize() -> void:   # SceneTree main-loop entry via -s; root exists he
 	fever_ball.x = 480.0; fever_ball.y = 300.0; fever_ball.vx = 0.0; fever_ball.vy = 0.0
 	game.state.fever = game.FEVER_TIME
 	var s_fv0: int = game.state.score
+	game.hitstop = 0.0   # clear the instant of impact before driving
 	game.update(0.016)   # ball rests inside the steel — clink at ×2
 	var d_fevered: int = int(game.state.score) - s_fv0
 	game.state.fever = 0.0
 	var s_pl0: int = game.state.score
+	game.hitstop = 0.0   # clear the instant of impact before driving
 	game.update(0.016)   # same clink, normal temperature
 	var d_plain: int = int(game.state.score) - s_pl0
 	check(d_fevered == 10 and d_plain == 5, "FEVER doubles every payout (steel clink " + str(d_plain) + " → " + str(d_fevered) + ")")
@@ -360,6 +369,7 @@ func _initialize() -> void:   # SceneTree main-loop entry via -s; root exists he
 	game.state.balls[0].vx = 0.0; game.state.balls[0].vy = 0.0
 	game.state.fever = 0.5
 	var s_out0: int = game.state.score
+	game.hitstop = 0.0   # clear the instant of impact before driving
 	game.update(0.8)
 	var saw_fever_out := false
 	for pp in game.state.popups:
@@ -383,6 +393,7 @@ func _initialize() -> void:   # SceneTree main-loop entry via -s; root exists he
 	check(not game.blocks_data.has(bS) and game.blocks_data.has(bC), "the 3×3 blast chain-kills its neighbours (steel included), but C sits outside A's radius and stands — the wave must roll one more beat")
 	check(game.state.booms.size() >= 1 and float(game.state.shake) >= 7.0, "blast spawns a shockwave ring and shakes the screen (" + str(game.state.booms.size()) + " ring(s), shake " + str(game.state.shake) + ")")
 	check(int(game.state.score) >= sD0 + 15, "wave bonus and chain-kill payouts both land (+ wave 10, steel 5 — got " + str(int(game.state.score) - sD0) + ")")
+	game.hitstop = 0.0   # clear the instant of impact before driving
 	game.update(0.2)   # past CHAIN_FUSE — the domino must fall on its beat
 	check(not game.blocks_data.has(bB) and not game.blocks_data.has(bC) and game.state.booms.size() >= 2, "the fused domino pops on its beat and its own wave takes C with it — second shockwave proves the wave is visible")
 	check(int(game.state.level) == 2, "the emptied field auto-clears even when the bomb wave lands the final blow (old code missed that case)")
@@ -407,6 +418,7 @@ func _initialize() -> void:   # SceneTree main-loop entry via -s; root exists he
 	game.state.score = 420
 	game.state.level = 5
 	game.toggle_menu()   # THE Esc menu — pause + settings + quit in one sheet
+	game.hitstop = 0.0   # clear the instant of impact before driving
 	game.update(0.016)
 	check(game.menu_open and bool(game.state.paused) and game.menu_panel.visible and game.pause_row.visible and not game.back_button.visible and str(game.sheet_title.text) == "Paused", "Esc opens ONE sheet that pauses the game: run info on top, Resume / Quit to menu / Quit game inside — no parallel pause menu")
 	game.handle_key("escape")
@@ -462,6 +474,7 @@ func _initialize() -> void:   # SceneTree main-loop entry via -s; root exists he
 	var saved_ball = game.new_ball(600.0, 646.0, -90)
 	saved_ball.vx = 0.0; saved_ball.vy = 400.0
 	game.state.balls = [saved_ball]
+	game.hitstop = 0.0   # clear the instant of impact before driving
 	game.update(0.016)
 	check(int(game.state.score) >= sc1 + 25 and float(game.state.balls[0].vy) < 0.0, "a shield floor save pays a near-miss bonus and still bounces")
 
@@ -481,6 +494,7 @@ func _initialize() -> void:   # SceneTree main-loop entry via -s; root exists he
 	game.restart()
 	var press_y0: float = float(game.blocks()[0].y)
 	game.state.pressTimer = 0.001
+	game.hitstop = 0.0   # clear the instant of impact before driving
 	game.update(0.01)
 	check(float(game.blocks()[0].y) > press_y0 and absf(float(game.state.pressTimer) - float(game.PRESS_INTERVAL)) < 0.05, "the press drops the field a row and re-arms its timer")
 
@@ -491,6 +505,7 @@ func _initialize() -> void:   # SceneTree main-loop entry via -s; root exists he
 	check(absf(game.score_mult() - 6.0) < 0.01, "FEVER stacks with the rush for ×6")
 	game.state.fever = 0.0
 	game.state.rushTimer = 0.001
+	game.hitstop = 0.0   # clear the instant of impact before driving
 	game.update(0.01)
 	check(not bool(game.state.rush), "the rush ends on schedule")
 
@@ -506,7 +521,9 @@ func _initialize() -> void:   # SceneTree main-loop entry via -s; root exists he
 	game.restart()
 	game.start_fever()
 	check(bool(game.music_adaptive), "FEVER borrows the high-energy theme on auto")
+	game.hitstop = 0.0   # the impact frame is a separate mechanic — the music check exercises the clock itself
 	game.state.fever = 0.01
+	game.hitstop = 0.0   # clear the instant of impact before driving
 	game.update(0.02)
 	check(not bool(game.music_adaptive), "the shuffle returns when FEVER ends")
 	check(float(game.beat_phase) >= 0.0 and float(game.beat_phase) < 1.0 and float(game.beat_pulse) >= 0.0 and float(game.beat_pulse) <= 1.0, "the music beat clock stays in range")
@@ -554,6 +571,49 @@ func _initialize() -> void:   # SceneTree main-loop entry via -s; root exists he
 	wf.store_buffer(tampered)
 	wf.close()
 	check(int(game.high_score_saved()) == 0, "a hand-edited score file fails the integrity check and resets")
+
+	# ---- hit-stop: the world freezes, the beat keeps ticking ----
+	var hitstop_snap := jstr(game.state.balls)
+	game._hitstop(0.4)
+	game.update(0.016)
+	check(jstr(game.state.balls) == hitstop_snap and float(game.hitstop) < 0.4, "hit-stop freezes the world (balls frozen, timer decaying)")
+	game.hitstop = 0.0
+
+	# ---- milestones (persistent, signed with the board) ----
+	# the-sieve is unreachable during this suite (the harness never reaches level 12), so the count stays meaningful
+	check(int(game.MILESTONES.size()) == 6, "milestone catalog ships (6 entries)")
+	var milestone_before: int = int(game.achievements.size())
+	game.unlock_milestone("the-sieve")
+	check(bool(game.achievements.get("the-sieve", false)), "milestone unlocked in memory")
+	game._score_cache = null
+	check(bool(game.load_score_data().achievements.get("the-sieve", false)), "milestone persists in the signed score file")
+	game.unlock_milestone("the-sieve")
+	check(int(game.achievements.size()) == milestone_before + 1, "a milestone can never fire twice")
+
+	# ---- finale (level 12 — THE PRESS HEAD) ----
+	game.state.level = 12
+	game.build_level()
+	var finale_boss := false
+	for bb in game.blocks():
+		if String(bb.t) == "boss" and bool(bb.get("finale", false)):
+			finale_boss = float(bb.w) > float(game.CELL_W) * 1.5 and int(bb.hp) == 16
+	check(finale_boss, "level 12 fields the Press Head — a wide (4-cell) boss at 16 HP")
+	check(bool(game.state.rush) == false, "the finale replaces the gold rush")
+	game.restart()
+
+	# ---- daily run (today's seed, identical for everyone that day) ----
+	game.state.daily_run = false
+	game.seed_base = 13
+	game.state.level = 1
+	game.build_level()
+	var default_layout: String = layout_str()
+	game.daily_play()
+	check(bool(game.state.daily_run) and int(game.seed_base) != 13, "daily run launches with today's seed")
+	var daily_layout: String = layout_str()
+	check(default_layout != daily_layout, "today's run differs from the default run")
+	game.play()
+	check(int(game.seed_base) == 13 and bool(game.state.daily_run) == false, "Play resumes the default JS-parity anchors")
+	game.restart()
 
 	print("\n" + ("ALL CHECKS PASSED" if fails == 0 else str(fails) + " CHECK(S) FAILED"))
 	quit(0 if fails == 0 else 1)
