@@ -405,8 +405,9 @@ func build_level() -> void:
 		var col: String = pal[(cell.r + cell.c) % pal.size()]
 		var boss: bool = String(cell.t) == "boss"
 		var explicit_x: float = float(cell.get("x", -1.0))   # only the finale carries a raw x — a centred 4-cell span
+		var boss_hp: int = int(cell.get("hp", t.hp))
 		blocks_data.append({
-			"c": cell.c, "r": cell.r, "t": cell.t, "hp": int(cell.get("hp", t.hp)), "color": col,
+			"c": cell.c, "r": cell.r, "t": cell.t, "hp": boss_hp, "max_hp": boss_hp, "color": col,
 			"x": explicit_x if explicit_x >= 0.0 else (W - GRID_COLS * (CELL_W + GAP) + GAP) / 2.0 + cell.c * (CELL_W + GAP),
 			"y": FIELD_TOP + cell.r * (CELL_H + GAP),
 			"w": float(cell.get("w", CELL_W)),   # the finale carries a 4-cell span — same 2x height, wider
@@ -465,7 +466,8 @@ func hit_block(b, from_explosion: bool = false) -> bool:
 	state.score += int(t.score * score_mult())
 	if b.hp > 0:
 		play_tone(520, 0.05, "square", 0.05)
-		if String(b.t) == "boss" and int(b.hp) == int(t.hp) / 2:   # phase two: the press cracks and sheds a drop shower
+		var boss_max: float = float(b.get("max_hp", t.hp))   # half health of THIS boss, not the block type (the finale carries 16)
+		if String(b.t) == "boss" and int(b.hp) == int(boss_max) / 2:   # phase two: the press cracks and sheds a drop shower
 			state.shake = maxf(float(state.shake), 9.0)
 			state.flash = maxf(float(state.flash), 0.6)
 			boom(b.x + bw(b) / 2.0, b.y + bh(b) / 2.0, 2, Color("#d8c24a"))
@@ -593,6 +595,9 @@ func do_explode(b, depth: int) -> void:   # a bomb dies: shockwave + 3×3 kill-w
 	for o in blocks_data.duplicate():   # snapshot: JS iterated a copy
 		if o == b:
 			continue
+		var oi: int = blocks_data.find(o)
+		if oi < 0:
+			continue   # already killed (or the level was rebuilt mid-blast) — don't hallucinate combo/popups for it
 		if absf(o.c - b.c) <= 1 and absf(o.r - b.r) <= 1:
 			if String(o.t) == "explode" and o.get("fuse") == null:
 				o["fuse"] = CHAIN_FUSE          # lit neighbour — pops on the next beat, domino style
@@ -600,7 +605,7 @@ func do_explode(b, depth: int) -> void:   # a bomb dies: shockwave + 3×3 kill-w
 			else:
 				state.score += int(BLOCK_TYPES[o.t].score * score_mult())   # chain-kills pay their score too — explosions are generous
 				o.hp = 1
-				destroy_block(o, blocks_data.find(o))
+				destroy_block(o, oi)
 
 func check_clear() -> void:   # level clear once all destructible blocks are gone — safe to call repeatedly, only the death-blow frame passes
 	for x in blocks_data:
@@ -694,8 +699,8 @@ func apply_powerup(key: String) -> void:
 		state.active.erase("EXPAND")
 	elif key != "":
 		state.active[key] = float(p.duration) + carry
-		if key != "SLOW": state.active.erase("SLOW")
-		if key != "FAST": state.active.erase("FAST")
+		if key == "SLOW": state.active.erase("FAST")   # slow and fast are mutually exclusive — any OTHER pickup leaves both alone
+		elif key == "FAST": state.active.erase("SLOW")
 	normalize_speeds()
 
 func normalize_speeds() -> void:
@@ -748,12 +753,17 @@ func lose_ball() -> void:
 	state.paddleW = PADDLE_BASE_W
 	state.active = {}
 	state.combo = 0
-	state.fever = 0.0
+	if float(state.fever) > 0.0:
+		state.fever = 0.0
+		sync_music_energy()   # losing the ball snuffs the heat — hand the fast theme back
 	reset_ball_on_paddle()
 
 func game_over() -> void:
 	_hitstop(0.16)   # the fall — the whole screen takes one held breath
 	state.over = true
+	if float(state.fever) > 0.0:
+		state.fever = 0.0
+		sync_music_energy()   # the run is over — the fast theme hands back too
 	state.high = int(max(state.high, state.score))
 	if int(state.score) > 0:
 		add_leaderboard_entry(int(state.score), int(state.level))
@@ -867,7 +877,12 @@ func quit_to_menu() -> void:   # "Quit to menu" from the paused sheet — an aba
 	_refresh_dim()
 	play_button.grab_focus()
 
+var _quitting := false   # once a close/quit is booked, a second close event must never double-book the run
+
 func _on_window_close() -> void:   # the X button / Alt-F4 must never lose a run: the pending score is booked before the app dies — and the close banks everything, every time
+	if _quitting:
+		return
+	_quitting = true
 	if screen == "game" and not bool(state.over) and int(state.score) > 0:
 		add_leaderboard_entry(int(state.score), int(state.level))
 		state.high = int(max(state.high, state.score))
@@ -2341,8 +2356,8 @@ func _draw() -> void:
 		_draw_menu_scene()   # the title scene fully replaces the frozen gameplay underneath
 		return
 	var font: Font = ThemeDB.fallback_font
-	var shake_x: float = (rr() - 0.5) * state.shake if state.shake > 0.0 else 0.0
-	var shake_y: float = (rr() - 0.5) * state.shake if state.shake > 0.0 else 0.0
+	var shake_x: float = (sin(bg_time * 91.0) * 0.5 + sin(bg_time * 137.0) * 0.5) * state.shake if state.shake > 0.0 else 0.0
+	var shake_y: float = (cos(bg_time * 113.0) * 0.5 + cos(bg_time * 71.0) * 0.5) * state.shake if state.shake > 0.0 else 0.0
 	draw_set_transform(Vector2(shake_x, shake_y), 0.0, Vector2(1, 1))
 
 	# background: cover-scaled PNG, or the default linear gradient — drawn across the WHOLE visible world, so expand-stretch windows (any aspect) never show dead space
@@ -2506,11 +2521,13 @@ func _draw() -> void:
 		var cpsz: int = 12 + int(3.0 * beat_pulse)
 		rrect_path(W / 2.0 - 80.0, 4.0, 160.0, 22.0, 11.0, Color(0.97, 0.94, 0.88, 0.88))
 		draw_string(font, Vector2(W / 2.0 - 76.0, 20.0), "COMBO ×" + str(state.combo), HORIZONTAL_ALIGNMENT_CENTER, 152.0, cpsz, Color("#8f5f1f"))
-	if float(state.fever) > 0.0:   # FEVER pill — its border flares on the beat
+	if float(state.fever) > 0.0:   # FEVER pill — light paper chip, no shadow box; the border flares on the beat and the label is bold ink
 		var fpulse: float = beat_pulse
-		rrect_path(16.0, 54.0, 158.0, 22.0, 11.0, Color(0.35, 0.12, 0.0, 0.45))
-		rrect_path(17.0, 55.0, 156.0, 20.0, 10.0, Color(1.0, 0.62, 0.15, 0.30 + 0.40 * fpulse), 1.5)
-		draw_string(font, Vector2(20.0, 70.0), "FEVER ×2  " + str(int(ceil(state.fever))) + "s", HORIZONTAL_ALIGNMENT_CENTER, 150.0, 12, Color("#8a5a1d"))
+		rrect_path(16.0, 54.0, 158.0, 22.0, 11.0, Color(0.97, 0.94, 0.88, 0.92))
+		rrect_path(17.0, 55.0, 156.0, 20.0, 10.0, Color(0.87, 0.47, 0.10, 0.45 + 0.45 * fpulse), 1.5)
+		var ftext: String = "FEVER ×2  " + str(int(ceil(state.fever))) + "s"
+		for fdx in [-1.0, 0.0, 1.0]:   # triple-pass for a bold label — draw_string carries no weight flag
+			draw_string(font, Vector2(20.0 + fdx, 70.0), ftext, HORIZONTAL_ALIGNMENT_CENTER, 150.0, 13, Color("#7a3f0c"))
 	if bool(state.rush):   # gold rush pill — bottom-right: the top-left belongs to FEVER and the mobile pause button
 		var rpulse: float = 0.5 + 0.5 * sin(bg_time * 10.0)
 		var rby: float = H - 44.0
